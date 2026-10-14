@@ -1,0 +1,1025 @@
+{
+  "v": 3,
+  "active": "cu9199up",
+  "updated": "2026-09-30T17:58:00.303Z",
+  "updatedBy": "Baseline pack",
+  "customers": [
+    {
+      "id": "cu9199up",
+      "name": "Baseline pack"
+    }
+  ],
+  "data": {
+    "cu9199up": {
+      "T1589.001": [
+        {
+          "id": "CA-001",
+          "name": "External password spray reconnaissance against Entra ID",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet distinct_user_threshold = 15;\nlet failure_codes = dynamic([50126, 50053, 50055, 50056, 50076, 50158]);\nunion isfuzzy=true\n    (SigninLogs | extend LogSource = \"Interactive\"),\n    (AADNonInteractiveUserSignInLogs | extend LogSource = \"NonInteractive\")\n| where TimeGenerated > ago(lookback)\n| where ResultType in (failure_codes)\n| where isnotempty(IPAddress)\n| summarize\n    FailedAttempts       = count(),\n    DistinctUsersTargeted= dcount(UserPrincipalName),\n    TargetedUsers        = make_set(UserPrincipalName, 50),\n    AppsTargeted         = make_set(AppDisplayName, 20),\n    ClientApps           = make_set(ClientAppUsed, 10),\n    Countries            = make_set(tostring(LocationDetails.countryOrRegion), 10),\n    FirstSeen            = min(TimeGenerated),\n    LastSeen             = max(TimeGenerated)\n    by IPAddress\n| where DistinctUsersTargeted >= distinct_user_threshold\n// Legacy auth protocols are a strong spray signal - raise severity if present\n| extend LegacyAuthUsed = ClientApps has_any (\"IMAP4\", \"POP3\", \"SMTP\", \"Other clients\", \"Exchange ActiveSync\")\n| extend Severity = iff(LegacyAuthUsed, \"High\", \"Medium\")\n| order by DistinctUsersTargeted desc\n// TUNING: exclude your own VPN egress and any legitimate scanner / pen-test IPs.\n//         Bump distinct_user_threshold if your tenant is large."
+        }
+      ],
+      "T1595": [
+        {
+          "id": "CA-001",
+          "name": "External password spray reconnaissance against Entra ID",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet distinct_user_threshold = 15;\nlet failure_codes = dynamic([50126, 50053, 50055, 50056, 50076, 50158]);\nunion isfuzzy=true\n    (SigninLogs | extend LogSource = \"Interactive\"),\n    (AADNonInteractiveUserSignInLogs | extend LogSource = \"NonInteractive\")\n| where TimeGenerated > ago(lookback)\n| where ResultType in (failure_codes)\n| where isnotempty(IPAddress)\n| summarize\n    FailedAttempts       = count(),\n    DistinctUsersTargeted= dcount(UserPrincipalName),\n    TargetedUsers        = make_set(UserPrincipalName, 50),\n    AppsTargeted         = make_set(AppDisplayName, 20),\n    ClientApps           = make_set(ClientAppUsed, 10),\n    Countries            = make_set(tostring(LocationDetails.countryOrRegion), 10),\n    FirstSeen            = min(TimeGenerated),\n    LastSeen             = max(TimeGenerated)\n    by IPAddress\n| where DistinctUsersTargeted >= distinct_user_threshold\n// Legacy auth protocols are a strong spray signal - raise severity if present\n| extend LegacyAuthUsed = ClientApps has_any (\"IMAP4\", \"POP3\", \"SMTP\", \"Other clients\", \"Exchange ActiveSync\")\n| extend Severity = iff(LegacyAuthUsed, \"High\", \"Medium\")\n| order by DistinctUsersTargeted desc\n// TUNING: exclude your own VPN egress and any legitimate scanner / pen-test IPs.\n//         Bump distinct_user_threshold if your tenant is large."
+        }
+      ],
+      "T1069.003": [
+        {
+          "id": "CA-002",
+          "name": "Enumeration of Entra ID directory objects by a non-admin",
+          "url": "",
+          "status": "Draft",
+          "sev": "Low",
+          "note": "",
+          "kql": "let lookback = 6h;\nlet graph_recon_ops = dynamic([\n    \"Get-AzureADUser\", \"List users\", \"List groups\", \"List servicePrincipals\",\n    \"List directoryRoles\", \"List applications\"]);\nAuditLogs\n| where TimeGenerated > ago(lookback)\n| where Category in (\"UserManagement\", \"GroupManagement\", \"DirectoryManagement\", \"ApplicationManagement\")\n| where OperationName has_any (graph_recon_ops) or OperationName startswith \"List \"\n| extend Actor       = tostring(InitiatedBy.user.userPrincipalName)\n| extend SourceIP    = tostring(InitiatedBy.user.ipAddress)\n| extend AppUsed     = tostring(AdditionalDetails[0].value)\n| where isnotempty(Actor)\n| summarize\n    OperationCount = count(),\n    Operations     = make_set(OperationName, 25),\n    SourceIPs      = make_set(SourceIP, 10),\n    FirstSeen      = min(TimeGenerated),\n    LastSeen       = max(TimeGenerated)\n    by Actor\n| where OperationCount > 200\n// TUNING: exclude service accounts that run directory sync, HR feeds, or IGA\n//         tooling. Those legitimately read the whole directory."
+        }
+      ],
+      "T1087.004": [
+        {
+          "id": "CA-002",
+          "name": "Enumeration of Entra ID directory objects by a non-admin",
+          "url": "",
+          "status": "Draft",
+          "sev": "Low",
+          "note": "",
+          "kql": "let lookback = 6h;\nlet graph_recon_ops = dynamic([\n    \"Get-AzureADUser\", \"List users\", \"List groups\", \"List servicePrincipals\",\n    \"List directoryRoles\", \"List applications\"]);\nAuditLogs\n| where TimeGenerated > ago(lookback)\n| where Category in (\"UserManagement\", \"GroupManagement\", \"DirectoryManagement\", \"ApplicationManagement\")\n| where OperationName has_any (graph_recon_ops) or OperationName startswith \"List \"\n| extend Actor       = tostring(InitiatedBy.user.userPrincipalName)\n| extend SourceIP    = tostring(InitiatedBy.user.ipAddress)\n| extend AppUsed     = tostring(AdditionalDetails[0].value)\n| where isnotempty(Actor)\n| summarize\n    OperationCount = count(),\n    Operations     = make_set(OperationName, 25),\n    SourceIPs      = make_set(SourceIP, 10),\n    FirstSeen      = min(TimeGenerated),\n    LastSeen       = max(TimeGenerated)\n    by Actor\n| where OperationCount > 200\n// TUNING: exclude service accounts that run directory sync, HR feeds, or IGA\n//         tooling. Those legitimately read the whole directory."
+        }
+      ],
+      "T1046": [
+        {
+          "id": "CA-003",
+          "name": "Internal network scanning from a managed endpoint",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 1h;\nDeviceNetworkEvents\n| where TimeGenerated > ago(lookback)\n| where ActionType in (\"ConnectionSuccess\", \"ConnectionFailed\")\n| where ipv4_is_private(RemoteIP)\n| summarize\n    DistinctHosts  = dcount(RemoteIP),\n    DistinctPorts  = dcount(RemotePort),\n    FailedConns    = countif(ActionType == \"ConnectionFailed\"),\n    TotalConns     = count(),\n    PortsTouched   = make_set(RemotePort, 40),\n    SampleTargets  = make_set(RemoteIP, 30)\n    by DeviceName, InitiatingProcessFileName, InitiatingProcessCommandLine,\n       InitiatingProcessAccountName, bin(TimeGenerated, 10m)\n| where DistinctHosts > 40 or (DistinctPorts > 25 and DistinctHosts > 10)\n| extend FailRatio = round(todouble(FailedConns) / todouble(TotalConns), 2)\n| where FailRatio > 0.3   // scanners generate mostly refused connections\n| order by DistinctHosts desc\n// TUNING: exclude vulnerability scanners (Qualys, Nessus, Defender for Endpoint's\n//         own network discovery), SCCM, and monitoring agents by\n//         InitiatingProcessFileName and DeviceName."
+        }
+      ],
+      "T1595.001": [
+        {
+          "id": "CA-003",
+          "name": "Internal network scanning from a managed endpoint",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 1h;\nDeviceNetworkEvents\n| where TimeGenerated > ago(lookback)\n| where ActionType in (\"ConnectionSuccess\", \"ConnectionFailed\")\n| where ipv4_is_private(RemoteIP)\n| summarize\n    DistinctHosts  = dcount(RemoteIP),\n    DistinctPorts  = dcount(RemotePort),\n    FailedConns    = countif(ActionType == \"ConnectionFailed\"),\n    TotalConns     = count(),\n    PortsTouched   = make_set(RemotePort, 40),\n    SampleTargets  = make_set(RemoteIP, 30)\n    by DeviceName, InitiatingProcessFileName, InitiatingProcessCommandLine,\n       InitiatingProcessAccountName, bin(TimeGenerated, 10m)\n| where DistinctHosts > 40 or (DistinctPorts > 25 and DistinctHosts > 10)\n| extend FailRatio = round(todouble(FailedConns) / todouble(TotalConns), 2)\n| where FailRatio > 0.3   // scanners generate mostly refused connections\n| order by DistinctHosts desc\n// TUNING: exclude vulnerability scanners (Qualys, Nessus, Defender for Endpoint's\n//         own network discovery), SCCM, and monitoring agents by\n//         InitiatingProcessFileName and DeviceName."
+        }
+      ],
+      "T1098.001": [
+        {
+          "id": "CA-004",
+          "name": "Newly registered app granted high-privilege Graph permissions",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet dangerous_perms = dynamic([\n    \"Mail.ReadWrite\", \"Mail.Read\", \"Mail.Send\", \"Files.ReadWrite.All\",\n    \"Directory.ReadWrite.All\", \"RoleManagement.ReadWrite.Directory\",\n    \"Application.ReadWrite.All\", \"AppRoleAssignment.ReadWrite.All\",\n    \"User.ReadWrite.All\", \"Sites.FullControl.All\", \"full_access_as_app\"]);\nAuditLogs\n| where TimeGenerated > ago(lookback)\n| where OperationName has_any (\"Add app role assignment\", \"Consent to application\",\n                               \"Add delegated permission grant\")\n| extend Actor      = tostring(InitiatedBy.user.userPrincipalName)\n| extend ActorApp   = tostring(InitiatedBy.app.displayName)\n| extend SourceIP   = tostring(InitiatedBy.user.ipAddress)\n| extend TargetApp  = tostring(TargetResources[0].displayName)\n| extend AppId      = tostring(TargetResources[0].id)\n| mv-expand ModProp = TargetResources[0].modifiedProperties\n| extend PermissionGranted = tostring(ModProp.newValue)\n| where PermissionGranted has_any (dangerous_perms)\n| project TimeGenerated, Actor, ActorApp, SourceIP, TargetApp, AppId,\n          PermissionGranted, OperationName, Result, CorrelationId\n// TUNING: maintain an allow-list of approved enterprise app IDs. Consent grants\n//         from your own IT admins during onboarding will fire this."
+        }
+      ],
+      "T1583.008": [
+        {
+          "id": "CA-004",
+          "name": "Newly registered app granted high-privilege Graph permissions",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet dangerous_perms = dynamic([\n    \"Mail.ReadWrite\", \"Mail.Read\", \"Mail.Send\", \"Files.ReadWrite.All\",\n    \"Directory.ReadWrite.All\", \"RoleManagement.ReadWrite.Directory\",\n    \"Application.ReadWrite.All\", \"AppRoleAssignment.ReadWrite.All\",\n    \"User.ReadWrite.All\", \"Sites.FullControl.All\", \"full_access_as_app\"]);\nAuditLogs\n| where TimeGenerated > ago(lookback)\n| where OperationName has_any (\"Add app role assignment\", \"Consent to application\",\n                               \"Add delegated permission grant\")\n| extend Actor      = tostring(InitiatedBy.user.userPrincipalName)\n| extend ActorApp   = tostring(InitiatedBy.app.displayName)\n| extend SourceIP   = tostring(InitiatedBy.user.ipAddress)\n| extend TargetApp  = tostring(TargetResources[0].displayName)\n| extend AppId      = tostring(TargetResources[0].id)\n| mv-expand ModProp = TargetResources[0].modifiedProperties\n| extend PermissionGranted = tostring(ModProp.newValue)\n| where PermissionGranted has_any (dangerous_perms)\n| project TimeGenerated, Actor, ActorApp, SourceIP, TargetApp, AppId,\n          PermissionGranted, OperationName, Result, CorrelationId\n// TUNING: maintain an allow-list of approved enterprise app IDs. Consent grants\n//         from your own IT admins during onboarding will fire this."
+        }
+      ],
+      "T1078.004": [
+        {
+          "id": "CA-005",
+          "name": "Successful sign-in from an IP that just failed a spray",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 24h;\nlet spray_window = 24h;\nlet spraying_ips =\n    SigninLogs\n    | where TimeGenerated > ago(spray_window)\n    | where ResultType !in (0, 50125, 50140, 70043, 70044)\n    | summarize FailedUsers = dcount(UserPrincipalName) by IPAddress\n    | where FailedUsers >= 10\n    | project IPAddress;\nSigninLogs\n| where TimeGenerated > ago(lookback)\n| where ResultType == 0\n| where IPAddress in (spraying_ips)\n| extend Country   = tostring(LocationDetails.countryOrRegion)\n| extend City      = tostring(LocationDetails.city)\n| extend DeviceOS  = tostring(DeviceDetail.operatingSystem)\n| extend DeviceId  = tostring(DeviceDetail.deviceId)\n| extend Compliant = tostring(DeviceDetail.isCompliant)\n| project TimeGenerated, UserPrincipalName, IPAddress, Country, City,\n          AppDisplayName, ClientAppUsed, ConditionalAccessStatus,\n          RiskLevelDuringSignIn, DeviceOS, DeviceId, Compliant, CorrelationId\n| order by TimeGenerated desc\n// TUNING: this is high-fidelity by design. If it is noisy you have a spray\n//         problem, not a rule problem. Check CA policy coverage first."
+        },
+        {
+          "id": "CA-017",
+          "name": "Account added to a privileged Entra ID role",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 15m;\nlet sensitive_roles = dynamic([\n    \"Global Administrator\", \"Privileged Role Administrator\", \"Security Administrator\",\n    \"Exchange Administrator\", \"SharePoint Administrator\", \"Application Administrator\",\n    \"Cloud Application Administrator\", \"User Administrator\", \"Hybrid Identity Administrator\",\n    \"Privileged Authentication Administrator\", \"Conditional Access Administrator\",\n    \"Intune Administrator\", \"Helpdesk Administrator\"]);\nAuditLogs\n| where TimeGenerated > ago(lookback)\n| where OperationName in~ (\"Add member to role\", \"Add eligible member to role\",\n                           \"Add member to role completed (PIM activation)\")\n| extend Actor      = tostring(InitiatedBy.user.userPrincipalName)\n| extend ActorApp   = tostring(InitiatedBy.app.displayName)\n| extend SourceIP   = tostring(InitiatedBy.user.ipAddress)\n| extend TargetUser = tostring(TargetResources[0].userPrincipalName)\n| mv-expand ModProp = TargetResources[0].modifiedProperties\n| where tostring(ModProp.displayName) =~ \"Role.DisplayName\"\n| extend RoleAdded = trim('\"', tostring(ModProp.newValue))\n| where RoleAdded in~ (sensitive_roles)\n| project TimeGenerated, Actor, ActorApp, SourceIP, TargetUser, RoleAdded,\n          OperationName, Result, CorrelationId\n| order by TimeGenerated desc\n// TUNING: if you run PIM properly, activations will dominate. Filter\n//         OperationName to exclude PIM activation and alert on permanent\n//         assignments only."
+        }
+      ],
+      "T1110.003": [
+        {
+          "id": "CA-005",
+          "name": "Successful sign-in from an IP that just failed a spray",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 24h;\nlet spray_window = 24h;\nlet spraying_ips =\n    SigninLogs\n    | where TimeGenerated > ago(spray_window)\n    | where ResultType !in (0, 50125, 50140, 70043, 70044)\n    | summarize FailedUsers = dcount(UserPrincipalName) by IPAddress\n    | where FailedUsers >= 10\n    | project IPAddress;\nSigninLogs\n| where TimeGenerated > ago(lookback)\n| where ResultType == 0\n| where IPAddress in (spraying_ips)\n| extend Country   = tostring(LocationDetails.countryOrRegion)\n| extend City      = tostring(LocationDetails.city)\n| extend DeviceOS  = tostring(DeviceDetail.operatingSystem)\n| extend DeviceId  = tostring(DeviceDetail.deviceId)\n| extend Compliant = tostring(DeviceDetail.isCompliant)\n| project TimeGenerated, UserPrincipalName, IPAddress, Country, City,\n          AppDisplayName, ClientAppUsed, ConditionalAccessStatus,\n          RiskLevelDuringSignIn, DeviceOS, DeviceId, Compliant, CorrelationId\n| order by TimeGenerated desc\n// TUNING: this is high-fidelity by design. If it is noisy you have a spray\n//         problem, not a rule problem. Check CA policy coverage first."
+        }
+      ],
+      "T1204.002": [
+        {
+          "id": "CA-006",
+          "name": "Malicious attachment delivered then executed on the endpoint",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 6h;\nlet delivered =\n    EmailAttachmentInfo\n    | where TimeGenerated > ago(lookback)\n    | where isnotempty(SHA256)\n    | join kind=inner (\n        EmailEvents\n        | where TimeGenerated > ago(lookback)\n        | where DeliveryAction == \"Delivered\"\n        | project NetworkMessageId, SenderFromAddress, SenderIPv4, Subject,\n                  RecipientEmailAddress, DeliveryLocation, ThreatTypes\n      ) on NetworkMessageId\n    | project SHA256, FileName, SenderFromAddress, Subject,\n              RecipientEmailAddress, MailTime = TimeGenerated, NetworkMessageId;\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where isnotempty(SHA256)\n| join kind=inner delivered on SHA256\n| where TimeGenerated > MailTime\n| extend MinutesToExecution = datetime_diff('minute', TimeGenerated, MailTime)\n| project TimeGenerated, DeviceName, AccountName, FileName, FolderPath,\n          ProcessCommandLine, InitiatingProcessFileName, SHA256,\n          SenderFromAddress, Subject, RecipientEmailAddress,\n          MailTime, MinutesToExecution, NetworkMessageId\n| order by TimeGenerated desc\n// TUNING: near-zero false positives. Widen lookback for slower-burn campaigns."
+        },
+        {
+          "id": "CA-007",
+          "name": "Office application spawning a script interpreter or LOLBin",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet office_parents = dynamic([\n    \"winword.exe\", \"excel.exe\", \"powerpnt.exe\", \"outlook.exe\", \"msaccess.exe\",\n    \"onenote.exe\", \"mspub.exe\", \"visio.exe\", \"wordpad.exe\"]);\nlet suspicious_children = dynamic([\n    \"powershell.exe\", \"pwsh.exe\", \"cmd.exe\", \"wscript.exe\", \"cscript.exe\",\n    \"mshta.exe\", \"rundll32.exe\", \"regsvr32.exe\", \"certutil.exe\", \"bitsadmin.exe\",\n    \"curl.exe\", \"msiexec.exe\", \"installutil.exe\", \"wmic.exe\", \"schtasks.exe\"]);\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where InitiatingProcessFileName has_any (office_parents)\n| where FileName has_any (suspicious_children)\n| extend Encoded = ProcessCommandLine has_any (\"-enc\", \"-EncodedCommand\", \"FromBase64String\", \"-e \")\n| extend Downloader = ProcessCommandLine has_any (\"http://\", \"https://\", \"DownloadString\",\n                                                  \"DownloadFile\", \"Invoke-WebRequest\", \"iwr \",\n                                                  \"curl \", \"bitsadmin\")\n| extend Severity = case(Encoded or Downloader, \"High\", \"Medium\")\n| project TimeGenerated, DeviceName, AccountName, AccountDomain,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          FileName, FolderPath, ProcessCommandLine, ProcessIntegrityLevel,\n          Encoded, Downloader, Severity, SHA256, ReportId, DeviceId\n| order by TimeGenerated desc\n// TUNING: some finance and reporting macros legitimately call cmd.exe. Exclude by\n//         InitiatingProcessCommandLine referencing a known internal template path."
+        },
+        {
+          "id": "CA-021",
+          "name": "Executable dropped into a user-writable directory and then run",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 2h;\nlet write_paths = dynamic([\n    @\"\\appdata\\local\\temp\\\", @\"\\appdata\\roaming\\\", @\"\\users\\public\\\",\n    @\"\\programdata\\\", @\"\\windows\\temp\\\", @\"\\downloads\\\", @\"\\perflogs\\\",\n    @\"\\windows\\tasks\\\", @\"\\$recycle.bin\\\"]);\nlet drops =\n    DeviceFileEvents\n    | where TimeGenerated > ago(lookback)\n    | where ActionType in (\"FileCreated\", \"FileRenamed\", \"FileModified\")\n    | where FileName endswith \".exe\" or FileName endswith \".dll\" or FileName endswith \".scr\"\n    | where FolderPath has_any (write_paths)\n    | where isnotempty(SHA256)\n    | project DropTime = TimeGenerated, DeviceId, DeviceName, SHA256,\n              DroppedFile = FileName, DropPath = FolderPath,\n              DroppedBy = InitiatingProcessFileName,\n              DroppedByCmd = InitiatingProcessCommandLine,\n              DropAccount = InitiatingProcessAccountName;\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where isnotempty(SHA256)\n| join kind=inner drops on DeviceId, SHA256\n| where TimeGenerated >= DropTime\n| extend SecondsToExecution = datetime_diff('second', TimeGenerated, DropTime)\n| project TimeGenerated, DeviceName, DeviceId, AccountName,\n          ExecutedFile = FileName, FolderPath, ProcessCommandLine,\n          DroppedFile, DropPath, DroppedBy, DroppedByCmd, DropAccount,\n          DropTime, SecondsToExecution, SHA256, ReportId\n| order by SecondsToExecution asc\n// TUNING: software installers do exactly this. Exclude DroppedBy in\n//         (\"msiexec.exe\",\"ccmexec.exe\",\"setup.exe\",\"teamsupdate.exe\",\"onedrivesetup.exe\")\n//         and hashes with high global prevalence."
+        }
+      ],
+      "T1566.001": [
+        {
+          "id": "CA-006",
+          "name": "Malicious attachment delivered then executed on the endpoint",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 6h;\nlet delivered =\n    EmailAttachmentInfo\n    | where TimeGenerated > ago(lookback)\n    | where isnotempty(SHA256)\n    | join kind=inner (\n        EmailEvents\n        | where TimeGenerated > ago(lookback)\n        | where DeliveryAction == \"Delivered\"\n        | project NetworkMessageId, SenderFromAddress, SenderIPv4, Subject,\n                  RecipientEmailAddress, DeliveryLocation, ThreatTypes\n      ) on NetworkMessageId\n    | project SHA256, FileName, SenderFromAddress, Subject,\n              RecipientEmailAddress, MailTime = TimeGenerated, NetworkMessageId;\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where isnotempty(SHA256)\n| join kind=inner delivered on SHA256\n| where TimeGenerated > MailTime\n| extend MinutesToExecution = datetime_diff('minute', TimeGenerated, MailTime)\n| project TimeGenerated, DeviceName, AccountName, FileName, FolderPath,\n          ProcessCommandLine, InitiatingProcessFileName, SHA256,\n          SenderFromAddress, Subject, RecipientEmailAddress,\n          MailTime, MinutesToExecution, NetworkMessageId\n| order by TimeGenerated desc\n// TUNING: near-zero false positives. Widen lookback for slower-burn campaigns."
+        },
+        {
+          "id": "CA-007",
+          "name": "Office application spawning a script interpreter or LOLBin",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet office_parents = dynamic([\n    \"winword.exe\", \"excel.exe\", \"powerpnt.exe\", \"outlook.exe\", \"msaccess.exe\",\n    \"onenote.exe\", \"mspub.exe\", \"visio.exe\", \"wordpad.exe\"]);\nlet suspicious_children = dynamic([\n    \"powershell.exe\", \"pwsh.exe\", \"cmd.exe\", \"wscript.exe\", \"cscript.exe\",\n    \"mshta.exe\", \"rundll32.exe\", \"regsvr32.exe\", \"certutil.exe\", \"bitsadmin.exe\",\n    \"curl.exe\", \"msiexec.exe\", \"installutil.exe\", \"wmic.exe\", \"schtasks.exe\"]);\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where InitiatingProcessFileName has_any (office_parents)\n| where FileName has_any (suspicious_children)\n| extend Encoded = ProcessCommandLine has_any (\"-enc\", \"-EncodedCommand\", \"FromBase64String\", \"-e \")\n| extend Downloader = ProcessCommandLine has_any (\"http://\", \"https://\", \"DownloadString\",\n                                                  \"DownloadFile\", \"Invoke-WebRequest\", \"iwr \",\n                                                  \"curl \", \"bitsadmin\")\n| extend Severity = case(Encoded or Downloader, \"High\", \"Medium\")\n| project TimeGenerated, DeviceName, AccountName, AccountDomain,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          FileName, FolderPath, ProcessCommandLine, ProcessIntegrityLevel,\n          Encoded, Downloader, Severity, SHA256, ReportId, DeviceId\n| order by TimeGenerated desc\n// TUNING: some finance and reporting macros legitimately call cmd.exe. Exclude by\n//         InitiatingProcessCommandLine referencing a known internal template path."
+        }
+      ],
+      "T1059": [
+        {
+          "id": "CA-007",
+          "name": "Office application spawning a script interpreter or LOLBin",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet office_parents = dynamic([\n    \"winword.exe\", \"excel.exe\", \"powerpnt.exe\", \"outlook.exe\", \"msaccess.exe\",\n    \"onenote.exe\", \"mspub.exe\", \"visio.exe\", \"wordpad.exe\"]);\nlet suspicious_children = dynamic([\n    \"powershell.exe\", \"pwsh.exe\", \"cmd.exe\", \"wscript.exe\", \"cscript.exe\",\n    \"mshta.exe\", \"rundll32.exe\", \"regsvr32.exe\", \"certutil.exe\", \"bitsadmin.exe\",\n    \"curl.exe\", \"msiexec.exe\", \"installutil.exe\", \"wmic.exe\", \"schtasks.exe\"]);\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where InitiatingProcessFileName has_any (office_parents)\n| where FileName has_any (suspicious_children)\n| extend Encoded = ProcessCommandLine has_any (\"-enc\", \"-EncodedCommand\", \"FromBase64String\", \"-e \")\n| extend Downloader = ProcessCommandLine has_any (\"http://\", \"https://\", \"DownloadString\",\n                                                  \"DownloadFile\", \"Invoke-WebRequest\", \"iwr \",\n                                                  \"curl \", \"bitsadmin\")\n| extend Severity = case(Encoded or Downloader, \"High\", \"Medium\")\n| project TimeGenerated, DeviceName, AccountName, AccountDomain,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          FileName, FolderPath, ProcessCommandLine, ProcessIntegrityLevel,\n          Encoded, Downloader, Severity, SHA256, ReportId, DeviceId\n| order by TimeGenerated desc\n// TUNING: some finance and reporting macros legitimately call cmd.exe. Exclude by\n//         InitiatingProcessCommandLine referencing a known internal template path."
+        }
+      ],
+      "T1021.001": [
+        {
+          "id": "CA-008",
+          "name": "Inbound RDP from the internet succeeding",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 1h;\nDeviceLogonEvents\n| where TimeGenerated > ago(lookback)\n| where ActionType == \"LogonSuccess\"\n| where LogonType in (\"RemoteInteractive\", \"Network\")\n| where isnotempty(RemoteIP)\n| where not(ipv4_is_private(RemoteIP))\n| where RemoteIP !startswith \"127.\"\n| extend GeoInfo = geo_info_from_ip_address(RemoteIP)\n| extend Country = tostring(GeoInfo.country), City = tostring(GeoInfo.city)\n| project TimeGenerated, DeviceName, DeviceId, AccountName, AccountDomain,\n          LogonType, RemoteIP, RemoteDeviceName, Country, City,\n          IsLocalAdmin, Protocol, ReportId\n| order by TimeGenerated desc\n// TUNING: exclude your published RDGW / Azure Bastion egress ranges. Any hit that\n//         is not one of those is worth a phone call."
+        }
+      ],
+      "T1133": [
+        {
+          "id": "CA-008",
+          "name": "Inbound RDP from the internet succeeding",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 1h;\nDeviceLogonEvents\n| where TimeGenerated > ago(lookback)\n| where ActionType == \"LogonSuccess\"\n| where LogonType in (\"RemoteInteractive\", \"Network\")\n| where isnotempty(RemoteIP)\n| where not(ipv4_is_private(RemoteIP))\n| where RemoteIP !startswith \"127.\"\n| extend GeoInfo = geo_info_from_ip_address(RemoteIP)\n| extend Country = tostring(GeoInfo.country), City = tostring(GeoInfo.city)\n| project TimeGenerated, DeviceName, DeviceId, AccountName, AccountDomain,\n          LogonType, RemoteIP, RemoteDeviceName, Country, City,\n          IsLocalAdmin, Protocol, ReportId\n| order by TimeGenerated desc\n// TUNING: exclude your published RDGW / Azure Bastion egress ranges. Any hit that\n//         is not one of those is worth a phone call."
+        }
+      ],
+      "T1027": [
+        {
+          "id": "CA-009",
+          "name": "Encoded or obfuscated PowerShell execution",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 1h;\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where FileName in~ (\"powershell.exe\", \"pwsh.exe\", \"powershell_ise.exe\")\n| where ProcessCommandLine has_any (\n    \"-enc\", \"-EncodedCommand\", \"-ec \", \"FromBase64String\", \"-nop\", \"-noprofile\",\n    \"-w hidden\", \"-windowstyle hidden\", \"-ExecutionPolicy Bypass\", \"-ep bypass\",\n    \"IEX\", \"Invoke-Expression\", \"DownloadString\", \"DownloadData\",\n    \"Net.WebClient\", \"Invoke-WebRequest\", \"Start-BitsTransfer\",\n    \"[Convert]::\", \"-join\", \"char[]\", \"Reflection.Assembly\", \"System.IO.Compression\")\n| extend IndicatorCount = array_length(extract_all(\n    @\"(?i)(-enc|-EncodedCommand|FromBase64String|-nop|-w hidden|bypass|IEX|Invoke-Expression|DownloadString|Net\\.WebClient|Reflection\\.Assembly)\",\n    ProcessCommandLine))\n| extend CmdLineLength = strlen(ProcessCommandLine)\n| extend Severity = case(IndicatorCount >= 3 or CmdLineLength > 1500, \"High\",\n                         IndicatorCount == 2, \"Medium\",\n                         \"Low\")\n| where Severity != \"Low\"\n| project TimeGenerated, DeviceName, DeviceId, AccountName, AccountDomain,\n          FileName, ProcessCommandLine, CmdLineLength, IndicatorCount, Severity,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessParentFileName, ProcessIntegrityLevel, ReportId\n| order by IndicatorCount desc, TimeGenerated desc\n// TUNING: SCCM, Intune remediation scripts, and Nessus agents use -enc heavily.\n//         Exclude by InitiatingProcessFileName (ccmexec.exe, IntuneManagement*)."
+        }
+      ],
+      "T1059.001": [
+        {
+          "id": "CA-009",
+          "name": "Encoded or obfuscated PowerShell execution",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 1h;\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where FileName in~ (\"powershell.exe\", \"pwsh.exe\", \"powershell_ise.exe\")\n| where ProcessCommandLine has_any (\n    \"-enc\", \"-EncodedCommand\", \"-ec \", \"FromBase64String\", \"-nop\", \"-noprofile\",\n    \"-w hidden\", \"-windowstyle hidden\", \"-ExecutionPolicy Bypass\", \"-ep bypass\",\n    \"IEX\", \"Invoke-Expression\", \"DownloadString\", \"DownloadData\",\n    \"Net.WebClient\", \"Invoke-WebRequest\", \"Start-BitsTransfer\",\n    \"[Convert]::\", \"-join\", \"char[]\", \"Reflection.Assembly\", \"System.IO.Compression\")\n| extend IndicatorCount = array_length(extract_all(\n    @\"(?i)(-enc|-EncodedCommand|FromBase64String|-nop|-w hidden|bypass|IEX|Invoke-Expression|DownloadString|Net\\.WebClient|Reflection\\.Assembly)\",\n    ProcessCommandLine))\n| extend CmdLineLength = strlen(ProcessCommandLine)\n| extend Severity = case(IndicatorCount >= 3 or CmdLineLength > 1500, \"High\",\n                         IndicatorCount == 2, \"Medium\",\n                         \"Low\")\n| where Severity != \"Low\"\n| project TimeGenerated, DeviceName, DeviceId, AccountName, AccountDomain,\n          FileName, ProcessCommandLine, CmdLineLength, IndicatorCount, Severity,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessParentFileName, ProcessIntegrityLevel, ReportId\n| order by IndicatorCount desc, TimeGenerated desc\n// TUNING: SCCM, Intune remediation scripts, and Nessus agents use -enc heavily.\n//         Exclude by InitiatingProcessFileName (ccmexec.exe, IntuneManagement*)."
+        }
+      ],
+      "T1021.006": [
+        {
+          "id": "CA-010",
+          "name": "WMI used for remote process execution",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 1h;\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where (FileName =~ \"wmic.exe\" and ProcessCommandLine has_all (\"/node:\", \"process\", \"call\", \"create\"))\n     or (InitiatingProcessFileName =~ \"wmiprvse.exe\"\n         and FileName in~ (\"cmd.exe\", \"powershell.exe\", \"pwsh.exe\", \"rundll32.exe\",\n                           \"mshta.exe\", \"regsvr32.exe\", \"wscript.exe\", \"cscript.exe\"))\n| extend RemoteTarget = extract(@\"(?i)/node:\\s*[\"\"']?([^\\s\"\"']+)\", 1, ProcessCommandLine)\n| project TimeGenerated, DeviceName, DeviceId, AccountName, AccountDomain,\n          FileName, ProcessCommandLine, RemoteTarget,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessAccountName, ProcessIntegrityLevel, ReportId\n| order by TimeGenerated desc\n// TUNING: inventory tooling and some helpdesk scripts use wmic /node. Exclude by\n//         AccountName for known service accounts."
+        }
+      ],
+      "T1047": [
+        {
+          "id": "CA-010",
+          "name": "WMI used for remote process execution",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 1h;\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where (FileName =~ \"wmic.exe\" and ProcessCommandLine has_all (\"/node:\", \"process\", \"call\", \"create\"))\n     or (InitiatingProcessFileName =~ \"wmiprvse.exe\"\n         and FileName in~ (\"cmd.exe\", \"powershell.exe\", \"pwsh.exe\", \"rundll32.exe\",\n                           \"mshta.exe\", \"regsvr32.exe\", \"wscript.exe\", \"cscript.exe\"))\n| extend RemoteTarget = extract(@\"(?i)/node:\\s*[\"\"']?([^\\s\"\"']+)\", 1, ProcessCommandLine)\n| project TimeGenerated, DeviceName, DeviceId, AccountName, AccountDomain,\n          FileName, ProcessCommandLine, RemoteTarget,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessAccountName, ProcessIntegrityLevel, ReportId\n| order by TimeGenerated desc\n// TUNING: inventory tooling and some helpdesk scripts use wmic /node. Exclude by\n//         AccountName for known service accounts."
+        }
+      ],
+      "T1059.003": [
+        {
+          "id": "CA-011",
+          "name": "Script interpreter executing from a user-writable temp path",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet interpreters = dynamic([\"wscript.exe\", \"cscript.exe\", \"mshta.exe\", \"hh.exe\"]);\nlet temp_paths = dynamic([\n    @\"\\appdata\\local\\temp\\\", @\"\\appdata\\roaming\\\", @\"\\users\\public\\\",\n    @\"\\programdata\\\", @\"\\windows\\temp\\\", @\"\\downloads\\\", @\"$recycle.bin\"]);\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where FileName has_any (interpreters)\n| where ProcessCommandLine has_any (temp_paths)\n   or ProcessCommandLine has_any (\".js\", \".jse\", \".vbs\", \".vbe\", \".wsf\", \".wsh\", \".hta\")\n| where ProcessCommandLine has_any (temp_paths)\n| project TimeGenerated, DeviceName, DeviceId, AccountName,\n          FileName, FolderPath, ProcessCommandLine,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessParentFileName, SHA256, ReportId\n| order by TimeGenerated desc\n// TUNING: some software installers drop and run .vbs from %TEMP%. Exclude by\n//         InitiatingProcessFileName == \"msiexec.exe\" once you have baselined."
+        }
+      ],
+      "T1059.005": [
+        {
+          "id": "CA-011",
+          "name": "Script interpreter executing from a user-writable temp path",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet interpreters = dynamic([\"wscript.exe\", \"cscript.exe\", \"mshta.exe\", \"hh.exe\"]);\nlet temp_paths = dynamic([\n    @\"\\appdata\\local\\temp\\\", @\"\\appdata\\roaming\\\", @\"\\users\\public\\\",\n    @\"\\programdata\\\", @\"\\windows\\temp\\\", @\"\\downloads\\\", @\"$recycle.bin\"]);\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where FileName has_any (interpreters)\n| where ProcessCommandLine has_any (temp_paths)\n   or ProcessCommandLine has_any (\".js\", \".jse\", \".vbs\", \".vbe\", \".wsf\", \".wsh\", \".hta\")\n| where ProcessCommandLine has_any (temp_paths)\n| project TimeGenerated, DeviceName, DeviceId, AccountName,\n          FileName, FolderPath, ProcessCommandLine,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessParentFileName, SHA256, ReportId\n| order by TimeGenerated desc\n// TUNING: some software installers drop and run .vbs from %TEMP%. Exclude by\n//         InitiatingProcessFileName == \"msiexec.exe\" once you have baselined."
+        }
+      ],
+      "T1059.007": [
+        {
+          "id": "CA-011",
+          "name": "Script interpreter executing from a user-writable temp path",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet interpreters = dynamic([\"wscript.exe\", \"cscript.exe\", \"mshta.exe\", \"hh.exe\"]);\nlet temp_paths = dynamic([\n    @\"\\appdata\\local\\temp\\\", @\"\\appdata\\roaming\\\", @\"\\users\\public\\\",\n    @\"\\programdata\\\", @\"\\windows\\temp\\\", @\"\\downloads\\\", @\"$recycle.bin\"]);\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where FileName has_any (interpreters)\n| where ProcessCommandLine has_any (temp_paths)\n   or ProcessCommandLine has_any (\".js\", \".jse\", \".vbs\", \".vbe\", \".wsf\", \".wsh\", \".hta\")\n| where ProcessCommandLine has_any (temp_paths)\n| project TimeGenerated, DeviceName, DeviceId, AccountName,\n          FileName, FolderPath, ProcessCommandLine,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessParentFileName, SHA256, ReportId\n| order by TimeGenerated desc\n// TUNING: some software installers drop and run .vbs from %TEMP%. Exclude by\n//         InitiatingProcessFileName == \"msiexec.exe\" once you have baselined."
+        }
+      ],
+      "T1053.005": [
+        {
+          "id": "CA-012",
+          "name": "Scheduled task created that runs a suspicious payload",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 1h;\nunion isfuzzy=true\n(\n    DeviceProcessEvents\n    | where TimeGenerated > ago(lookback)\n    | where FileName in~ (\"schtasks.exe\", \"at.exe\")\n    | where ProcessCommandLine has_any (\"/create\", \"/CREATE\", \"-create\")\n    | extend Method = \"schtasks.exe\"\n    | extend Detail = ProcessCommandLine\n),\n(\n    DeviceProcessEvents\n    | where TimeGenerated > ago(lookback)\n    | where FileName in~ (\"powershell.exe\", \"pwsh.exe\")\n    | where ProcessCommandLine has_any (\"Register-ScheduledTask\", \"New-ScheduledTask\")\n    | extend Method = \"PowerShell cmdlet\"\n    | extend Detail = ProcessCommandLine\n)\n| where Detail has_any (\n    \"powershell\", \"pwsh\", \"cmd.exe\", \"mshta\", \"rundll32\", \"regsvr32\", \"wscript\",\n    \"cscript\", \"certutil\", \"bitsadmin\", \"curl\", \"-enc\", \"http://\", \"https://\",\n    @\"\\appdata\\\", @\"\\programdata\\\", @\"\\users\\public\\\", @\"\\temp\\\")\n| extend RunsAsSystem = Detail has_any (\"/ru system\", \"/RU SYSTEM\", \"NT AUTHORITY\\\\SYSTEM\")\n| project TimeGenerated, DeviceName, DeviceId, AccountName, AccountDomain,\n          Method, Detail, RunsAsSystem, InitiatingProcessFileName,\n          InitiatingProcessCommandLine, InitiatingProcessAccountName, ReportId\n| order by TimeGenerated desc\n// TUNING: patching and backup agents create tasks constantly. Exclude by\n//         InitiatingProcessFileName and by task name prefix in the command line."
+        }
+      ],
+      "T1547.001": [
+        {
+          "id": "CA-013",
+          "name": "Run key or startup folder persistence pointing at a suspicious binary",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet suspect_paths = dynamic([\n    @\"\\appdata\\local\\temp\\\", @\"\\appdata\\roaming\\\", @\"\\users\\public\\\",\n    @\"\\programdata\\\", @\"\\windows\\temp\\\", @\"\\downloads\\\", @\"\\perflogs\\\"]);\nlet suspect_bins = dynamic([\n    \"powershell\", \"pwsh\", \"cmd.exe\", \"mshta\", \"rundll32\", \"regsvr32\",\n    \"wscript\", \"cscript\", \"certutil\", \"bitsadmin\", \"curl.exe\", \"msiexec\"]);\nunion isfuzzy=true\n(\n    DeviceRegistryEvents\n    | where TimeGenerated > ago(lookback)\n    | where ActionType in (\"RegistryValueSet\", \"RegistryKeyCreated\")\n    | where RegistryKey has_any (\n        @\"\\CurrentVersion\\Run\", @\"\\CurrentVersion\\RunOnce\",\n        @\"\\CurrentVersion\\RunServices\", @\"\\CurrentVersion\\Explorer\\Shell Folders\",\n        @\"\\CurrentVersion\\Winlogon\", @\"\\CurrentVersion\\Policies\\Explorer\\Run\")\n    | where RegistryValueData has_any (suspect_paths) or RegistryValueData has_any (suspect_bins)\n    | extend Vector = \"Registry Run key\"\n    | extend Artifact = strcat(RegistryKey, \" -> \", RegistryValueName, \" = \", RegistryValueData)\n),\n(\n    DeviceFileEvents\n    | where TimeGenerated > ago(lookback)\n    | where ActionType in (\"FileCreated\", \"FileRenamed\", \"FileModified\")\n    | where FolderPath has @\"\\Start Menu\\Programs\\Startup\"\n    | extend Vector = \"Startup folder\"\n    | extend Artifact = strcat(FolderPath, FileName)\n)\n| project TimeGenerated, DeviceName, DeviceId, Vector, Artifact,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessAccountName, InitiatingProcessFolderPath, ReportId\n| order by TimeGenerated desc\n// TUNING: OneDrive, Teams, and most agents write Run keys on install. Exclude on\n//         InitiatingProcessFileName plus a known-good RegistryValueData prefix."
+        }
+      ],
+      "T1543.003": [
+        {
+          "id": "CA-014",
+          "name": "New Windows service created pointing at an unusual image path",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 1h;\nunion isfuzzy=true\n(\n    DeviceProcessEvents\n    | where TimeGenerated > ago(lookback)\n    | where (FileName =~ \"sc.exe\" and ProcessCommandLine has_any (\"create\", \"config\"))\n         or (FileName in~ (\"powershell.exe\", \"pwsh.exe\") and ProcessCommandLine has_any (\"New-Service\", \"Set-Service\"))\n    | extend Vector = \"Service creation command\"\n    | extend Artifact = ProcessCommandLine\n    | extend Actor = AccountName\n),\n(\n    DeviceRegistryEvents\n    | where TimeGenerated > ago(lookback)\n    | where ActionType == \"RegistryValueSet\"\n    | where RegistryKey startswith @\"HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\"\n    | where RegistryValueName in~ (\"ImagePath\", \"ServiceDll\")\n    | extend Vector = \"Service ImagePath written\"\n    | extend Artifact = strcat(RegistryKey, \" -> \", RegistryValueData)\n    | extend Actor = InitiatingProcessAccountName\n)\n| where Artifact has_any (\n    @\"\\appdata\\\", @\"\\programdata\\\", @\"\\users\\public\\\", @\"\\temp\\\", @\"\\downloads\\\",\n    @\"\\perflogs\\\", \"powershell\", \"cmd.exe /c\", \"rundll32\", \"regsvr32\", \"mshta\",\n    \"-enc\", \"http://\", \"https://\")\n| project TimeGenerated, DeviceName, DeviceId, Vector, Artifact, Actor,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessFolderPath, ReportId\n| order by TimeGenerated desc\n// TUNING: EDR, backup, and RMM installers create services from %ProgramData%.\n//         Allow-list those specific service names once baselined."
+        }
+      ],
+      "T1569.002": [
+        {
+          "id": "CA-014",
+          "name": "New Windows service created pointing at an unusual image path",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 1h;\nunion isfuzzy=true\n(\n    DeviceProcessEvents\n    | where TimeGenerated > ago(lookback)\n    | where (FileName =~ \"sc.exe\" and ProcessCommandLine has_any (\"create\", \"config\"))\n         or (FileName in~ (\"powershell.exe\", \"pwsh.exe\") and ProcessCommandLine has_any (\"New-Service\", \"Set-Service\"))\n    | extend Vector = \"Service creation command\"\n    | extend Artifact = ProcessCommandLine\n    | extend Actor = AccountName\n),\n(\n    DeviceRegistryEvents\n    | where TimeGenerated > ago(lookback)\n    | where ActionType == \"RegistryValueSet\"\n    | where RegistryKey startswith @\"HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\"\n    | where RegistryValueName in~ (\"ImagePath\", \"ServiceDll\")\n    | extend Vector = \"Service ImagePath written\"\n    | extend Artifact = strcat(RegistryKey, \" -> \", RegistryValueData)\n    | extend Actor = InitiatingProcessAccountName\n)\n| where Artifact has_any (\n    @\"\\appdata\\\", @\"\\programdata\\\", @\"\\users\\public\\\", @\"\\temp\\\", @\"\\downloads\\\",\n    @\"\\perflogs\\\", \"powershell\", \"cmd.exe /c\", \"rundll32\", \"regsvr32\", \"mshta\",\n    \"-enc\", \"http://\", \"https://\")\n| project TimeGenerated, DeviceName, DeviceId, Vector, Artifact, Actor,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessFolderPath, ReportId\n| order by TimeGenerated desc\n// TUNING: EDR, backup, and RMM installers create services from %ProgramData%.\n//         Allow-list those specific service names once baselined."
+        }
+      ],
+      "T1546.003": [
+        {
+          "id": "CA-015",
+          "name": "WMI event subscription persistence",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 1h;\nunion isfuzzy=true\n(\n    DeviceEvents\n    | where TimeGenerated > ago(lookback)\n    | where ActionType startswith \"Wmi\"\n    | extend Vector = ActionType\n    | extend Artifact = strcat(AdditionalFields)\n),\n(\n    DeviceProcessEvents\n    | where TimeGenerated > ago(lookback)\n    | where ProcessCommandLine has_any (\n        \"__EventFilter\", \"CommandLineEventConsumer\", \"ActiveScriptEventConsumer\",\n        \"__FilterToConsumerBinding\", \"Set-WmiInstance\", \"Register-WmiEvent\",\n        \"New-CimInstance -Namespace root/subscription\")\n    | extend Vector = \"WMI subscription via command line\"\n    | extend Artifact = ProcessCommandLine\n)\n| project TimeGenerated, DeviceName, DeviceId, Vector, Artifact,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessAccountName, ReportId\n| order by TimeGenerated desc\n// TUNING: SCCM uses WMI subscriptions legitimately. Exclude InitiatingProcessFileName\n//         == \"ccmexec.exe\". Everything else here is rare and worth reading."
+        }
+      ],
+      "T1114.003": [
+        {
+          "id": "CA-016",
+          "name": "Inbox rule created that hides or forwards mail",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 1h;\nOfficeActivity\n| where TimeGenerated > ago(lookback)\n| where OfficeWorkload =~ \"Exchange\"\n| where Operation in~ (\"New-InboxRule\", \"Set-InboxRule\", \"UpdateInboxRules\",\n                       \"Set-Mailbox\", \"Set-TransportRule\", \"New-TransportRule\")\n| extend RuleParams = tostring(Parameters)\n| where RuleParams has_any (\n    \"ForwardTo\", \"ForwardAsAttachmentTo\", \"RedirectTo\", \"DeleteMessage\",\n    \"MoveToFolder\", \"MarkAsRead\", \"ForwardingSmtpAddress\", \"DeliverToMailboxAndForward\")\n// Rules that both hide evidence and exfiltrate are the classic BEC pattern\n| extend Forwards = RuleParams has_any (\"ForwardTo\", \"RedirectTo\", \"ForwardingSmtpAddress\", \"ForwardAsAttachmentTo\")\n| extend Hides    = RuleParams has_any (\"DeleteMessage\", \"MarkAsRead\")\n                    or RuleParams has_any (\"RSS Feeds\", \"RSS Subscriptions\", \"Conversation History\", \"Junk\", \"Archive\", \"Deleted Items\")\n| extend Severity = case(Forwards and Hides, \"High\", Forwards, \"High\", \"Medium\")\n| project TimeGenerated, UserId, ClientIP, Operation, ResultStatus,\n          Forwards, Hides, Severity, RuleParams, OriginatingServer\n| order by TimeGenerated desc\n// TUNING: users create legitimate move-to-folder rules constantly. Consider\n//         dropping the Hides-only branch and alerting on Forwards only, then\n//         reviewing Hides weekly as a hunting query instead."
+        }
+      ],
+      "T1564.008": [
+        {
+          "id": "CA-016",
+          "name": "Inbox rule created that hides or forwards mail",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 1h;\nOfficeActivity\n| where TimeGenerated > ago(lookback)\n| where OfficeWorkload =~ \"Exchange\"\n| where Operation in~ (\"New-InboxRule\", \"Set-InboxRule\", \"UpdateInboxRules\",\n                       \"Set-Mailbox\", \"Set-TransportRule\", \"New-TransportRule\")\n| extend RuleParams = tostring(Parameters)\n| where RuleParams has_any (\n    \"ForwardTo\", \"ForwardAsAttachmentTo\", \"RedirectTo\", \"DeleteMessage\",\n    \"MoveToFolder\", \"MarkAsRead\", \"ForwardingSmtpAddress\", \"DeliverToMailboxAndForward\")\n// Rules that both hide evidence and exfiltrate are the classic BEC pattern\n| extend Forwards = RuleParams has_any (\"ForwardTo\", \"RedirectTo\", \"ForwardingSmtpAddress\", \"ForwardAsAttachmentTo\")\n| extend Hides    = RuleParams has_any (\"DeleteMessage\", \"MarkAsRead\")\n                    or RuleParams has_any (\"RSS Feeds\", \"RSS Subscriptions\", \"Conversation History\", \"Junk\", \"Archive\", \"Deleted Items\")\n| extend Severity = case(Forwards and Hides, \"High\", Forwards, \"High\", \"Medium\")\n| project TimeGenerated, UserId, ClientIP, Operation, ResultStatus,\n          Forwards, Hides, Severity, RuleParams, OriginatingServer\n| order by TimeGenerated desc\n// TUNING: users create legitimate move-to-folder rules constantly. Consider\n//         dropping the Hides-only branch and alerting on Forwards only, then\n//         reviewing Hides weekly as a hunting query instead."
+        }
+      ],
+      "T1098.003": [
+        {
+          "id": "CA-017",
+          "name": "Account added to a privileged Entra ID role",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 15m;\nlet sensitive_roles = dynamic([\n    \"Global Administrator\", \"Privileged Role Administrator\", \"Security Administrator\",\n    \"Exchange Administrator\", \"SharePoint Administrator\", \"Application Administrator\",\n    \"Cloud Application Administrator\", \"User Administrator\", \"Hybrid Identity Administrator\",\n    \"Privileged Authentication Administrator\", \"Conditional Access Administrator\",\n    \"Intune Administrator\", \"Helpdesk Administrator\"]);\nAuditLogs\n| where TimeGenerated > ago(lookback)\n| where OperationName in~ (\"Add member to role\", \"Add eligible member to role\",\n                           \"Add member to role completed (PIM activation)\")\n| extend Actor      = tostring(InitiatedBy.user.userPrincipalName)\n| extend ActorApp   = tostring(InitiatedBy.app.displayName)\n| extend SourceIP   = tostring(InitiatedBy.user.ipAddress)\n| extend TargetUser = tostring(TargetResources[0].userPrincipalName)\n| mv-expand ModProp = TargetResources[0].modifiedProperties\n| where tostring(ModProp.displayName) =~ \"Role.DisplayName\"\n| extend RoleAdded = trim('\"', tostring(ModProp.newValue))\n| where RoleAdded in~ (sensitive_roles)\n| project TimeGenerated, Actor, ActorApp, SourceIP, TargetUser, RoleAdded,\n          OperationName, Result, CorrelationId\n| order by TimeGenerated desc\n// TUNING: if you run PIM properly, activations will dominate. Filter\n//         OperationName to exclude PIM activation and alert on permanent\n//         assignments only."
+        }
+      ],
+      "T1548.002": [
+        {
+          "id": "CA-018",
+          "name": "UAC bypass via known auto-elevate hijack paths",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 1h;\nunion isfuzzy=true\n(\n    DeviceRegistryEvents\n    | where TimeGenerated > ago(lookback)\n    | where ActionType in (\"RegistryValueSet\", \"RegistryKeyCreated\")\n    | where RegistryKey has_any (\n        @\"\\Classes\\ms-settings\\shell\\open\\command\",\n        @\"\\Classes\\mscfile\\shell\\open\\command\",\n        @\"\\Classes\\exefile\\shell\\runas\\command\",\n        @\"\\Classes\\Folder\\shell\\open\\command\",\n        @\"\\Classes\\AppX82a6gwre4fdg3bt635tn5ctqjf8msdd2\\Shell\\open\\command\")\n    | extend Vector = \"COM handler hijack for auto-elevate binary\"\n    | extend Artifact = strcat(RegistryKey, \" = \", RegistryValueData)\n    | extend Actor = InitiatingProcessAccountName\n),\n(\n    DeviceProcessEvents\n    | where TimeGenerated > ago(lookback)\n    | where InitiatingProcessFileName in~ (\n        \"fodhelper.exe\", \"computerdefaults.exe\", \"sdclt.exe\", \"eventvwr.exe\",\n        \"slui.exe\", \"wsreset.exe\", \"dccw.exe\", \"cmstp.exe\", \"changepk.exe\")\n    | where FileName in~ (\"cmd.exe\", \"powershell.exe\", \"pwsh.exe\", \"rundll32.exe\",\n                          \"mshta.exe\", \"regsvr32.exe\", \"wscript.exe\")\n    | extend Vector = strcat(\"Auto-elevate binary spawned \", FileName)\n    | extend Artifact = ProcessCommandLine\n    | extend Actor = AccountName\n)\n| project TimeGenerated, DeviceName, DeviceId, Vector, Artifact, Actor,\n          InitiatingProcessFileName, InitiatingProcessCommandLine, ReportId\n| order by TimeGenerated desc\n// TUNING: these paths have almost no legitimate use. Expect very low volume."
+        }
+      ],
+      "T1134.001": [
+        {
+          "id": "CA-019",
+          "name": "Token manipulation / process running with unexpected SYSTEM context",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 1h;\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where AccountName in~ (\"system\", \"local service\", \"network service\")\n| where InitiatingProcessAccountName !in~ (\"system\", \"local service\", \"network service\")\n| where InitiatingProcessFileName !in~ (\"services.exe\", \"svchost.exe\", \"wininit.exe\",\n                                        \"lsass.exe\", \"smss.exe\", \"csrss.exe\",\n                                        \"ccmexec.exe\", \"msiexec.exe\", \"trustedinstaller.exe\")\n| project TimeGenerated, DeviceName, DeviceId,\n          AccountName, AccountDomain, FileName, FolderPath, ProcessCommandLine,\n          ProcessIntegrityLevel, ProcessTokenElevation,\n          InitiatingProcessAccountName, InitiatingProcessFileName,\n          InitiatingProcessCommandLine, InitiatingProcessFolderPath, ReportId\n| order by TimeGenerated desc\n// TUNING: legitimate installers and RMM tools do this. Baseline for a week and\n//         extend the InitiatingProcessFileName exclusion list before enabling."
+        }
+      ],
+      "T1134.002": [
+        {
+          "id": "CA-019",
+          "name": "Token manipulation / process running with unexpected SYSTEM context",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 1h;\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where AccountName in~ (\"system\", \"local service\", \"network service\")\n| where InitiatingProcessAccountName !in~ (\"system\", \"local service\", \"network service\")\n| where InitiatingProcessFileName !in~ (\"services.exe\", \"svchost.exe\", \"wininit.exe\",\n                                        \"lsass.exe\", \"smss.exe\", \"csrss.exe\",\n                                        \"ccmexec.exe\", \"msiexec.exe\", \"trustedinstaller.exe\")\n| project TimeGenerated, DeviceName, DeviceId,\n          AccountName, AccountDomain, FileName, FolderPath, ProcessCommandLine,\n          ProcessIntegrityLevel, ProcessTokenElevation,\n          InitiatingProcessAccountName, InitiatingProcessFileName,\n          InitiatingProcessCommandLine, InitiatingProcessFolderPath, ReportId\n| order by TimeGenerated desc\n// TUNING: legitimate installers and RMM tools do this. Baseline for a week and\n//         extend the InitiatingProcessFileName exclusion list before enabling."
+        }
+      ],
+      "T1105": [
+        {
+          "id": "CA-020",
+          "name": "LOLBin used to download a remote payload",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet lolbins = dynamic([\n    \"certutil.exe\", \"bitsadmin.exe\", \"mshta.exe\", \"regsvr32.exe\", \"rundll32.exe\",\n    \"msiexec.exe\", \"installutil.exe\", \"msbuild.exe\", \"cmstp.exe\", \"curl.exe\",\n    \"wget.exe\", \"esentutl.exe\", \"expand.exe\", \"extrac32.exe\", \"findstr.exe\",\n    \"hh.exe\", \"ieexec.exe\", \"makecab.exe\", \"print.exe\", \"replace.exe\",\n    \"desktopimgdownldr.exe\", \"certreq.exe\", \"presentationhost.exe\"]);\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where FileName has_any (lolbins)\n| where ProcessCommandLine matches regex @\"(?i)(https?://|ftp://|\\\\\\\\[a-z0-9\\.\\-]+\\\\)\"\n// Exclude Microsoft and other trusted destinations\n| where not(ProcessCommandLine has_any (\n    \"microsoft.com\", \"windowsupdate.com\", \"msedge.net\", \"office.com\",\n    \"office365.com\", \"azureedge.net\", \"digicert.com\", \"verisign.com\",\n    \"symcb.com\", \"sectigo.com\", \"globalsign.com\", \"entrust.net\", \"letsencrypt.org\"))\n| extend RemoteUrl = extract(@\"(?i)(https?://[^\\s\"\"'>]+)\", 1, ProcessCommandLine)\n| extend UncPath   = extract(@\"(\\\\\\\\[^\\s\"\"'>]+)\", 1, ProcessCommandLine)\n| extend WritesToDisk = ProcessCommandLine has_any (\n    \"-urlcache\", \"/urlcache\", \"-decode\", \"/decode\", \"-o \", \"--output\",\n    \"/transfer\", \"-split\", \"OutFile\")\n| extend Severity = iff(WritesToDisk, \"High\", \"Medium\")\n| project TimeGenerated, DeviceName, DeviceId, AccountName, AccountDomain,\n          FileName, FolderPath, ProcessCommandLine, RemoteUrl, UncPath,\n          WritesToDisk, Severity, InitiatingProcessFileName,\n          InitiatingProcessCommandLine, InitiatingProcessParentFileName,\n          ProcessIntegrityLevel, SHA256, ReportId\n| order by TimeGenerated desc\n// TUNING: certutil is used by some PKI scripts and certreq by autoenrolment.\n//         Exclude by AccountName for those service accounts, not by removing\n//         the binary from the list."
+        },
+        {
+          "id": "CA-040",
+          "name": "Connection to a newly observed rare external destination",
+          "url": "",
+          "status": "Draft",
+          "sev": "Low",
+          "note": "",
+          "kql": "let lookback = 6h;\nlet baseline_days = 21d;\nlet known_destinations =\n    DeviceNetworkEvents\n    | where TimeGenerated between (ago(baseline_days) .. ago(lookback))\n    | where ActionType == \"ConnectionSuccess\"\n    | summarize DevicesSeen = dcount(DeviceId) by RemoteUrl\n    | where DevicesSeen >= 3\n    | project RemoteUrl;\nDeviceNetworkEvents\n| where TimeGenerated > ago(lookback)\n| where ActionType == \"ConnectionSuccess\"\n| where isnotempty(RemoteUrl)\n| where RemoteUrl !in (known_destinations)\n| where not(ipv4_is_private(RemoteIP))\n| where InitiatingProcessFileName !in~ (\"chrome.exe\", \"msedge.exe\", \"firefox.exe\", \"brave.exe\")\n| summarize\n    ConnCount   = count(),\n    DevicesSeen = dcount(DeviceId),\n    Devices     = make_set(DeviceName, 10),\n    Ports       = make_set(RemotePort, 10),\n    FirstSeen   = min(TimeGenerated),\n    LastSeen    = max(TimeGenerated)\n    by RemoteUrl, RemoteIP, InitiatingProcessFileName, InitiatingProcessFolderPath\n| where DevicesSeen <= 3\n| extend GeoInfo = geo_info_from_ip_address(RemoteIP)\n| extend Country = tostring(GeoInfo.country)\n| order by FirstSeen desc\n// TUNING: run this as a scheduled hunting query first, not an alert rule. The\n//         volume is high until your baseline matures."
+        }
+      ],
+      "T1218.005": [
+        {
+          "id": "CA-020",
+          "name": "LOLBin used to download a remote payload",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet lolbins = dynamic([\n    \"certutil.exe\", \"bitsadmin.exe\", \"mshta.exe\", \"regsvr32.exe\", \"rundll32.exe\",\n    \"msiexec.exe\", \"installutil.exe\", \"msbuild.exe\", \"cmstp.exe\", \"curl.exe\",\n    \"wget.exe\", \"esentutl.exe\", \"expand.exe\", \"extrac32.exe\", \"findstr.exe\",\n    \"hh.exe\", \"ieexec.exe\", \"makecab.exe\", \"print.exe\", \"replace.exe\",\n    \"desktopimgdownldr.exe\", \"certreq.exe\", \"presentationhost.exe\"]);\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where FileName has_any (lolbins)\n| where ProcessCommandLine matches regex @\"(?i)(https?://|ftp://|\\\\\\\\[a-z0-9\\.\\-]+\\\\)\"\n// Exclude Microsoft and other trusted destinations\n| where not(ProcessCommandLine has_any (\n    \"microsoft.com\", \"windowsupdate.com\", \"msedge.net\", \"office.com\",\n    \"office365.com\", \"azureedge.net\", \"digicert.com\", \"verisign.com\",\n    \"symcb.com\", \"sectigo.com\", \"globalsign.com\", \"entrust.net\", \"letsencrypt.org\"))\n| extend RemoteUrl = extract(@\"(?i)(https?://[^\\s\"\"'>]+)\", 1, ProcessCommandLine)\n| extend UncPath   = extract(@\"(\\\\\\\\[^\\s\"\"'>]+)\", 1, ProcessCommandLine)\n| extend WritesToDisk = ProcessCommandLine has_any (\n    \"-urlcache\", \"/urlcache\", \"-decode\", \"/decode\", \"-o \", \"--output\",\n    \"/transfer\", \"-split\", \"OutFile\")\n| extend Severity = iff(WritesToDisk, \"High\", \"Medium\")\n| project TimeGenerated, DeviceName, DeviceId, AccountName, AccountDomain,\n          FileName, FolderPath, ProcessCommandLine, RemoteUrl, UncPath,\n          WritesToDisk, Severity, InitiatingProcessFileName,\n          InitiatingProcessCommandLine, InitiatingProcessParentFileName,\n          ProcessIntegrityLevel, SHA256, ReportId\n| order by TimeGenerated desc\n// TUNING: certutil is used by some PKI scripts and certreq by autoenrolment.\n//         Exclude by AccountName for those service accounts, not by removing\n//         the binary from the list."
+        }
+      ],
+      "T1218.010": [
+        {
+          "id": "CA-020",
+          "name": "LOLBin used to download a remote payload",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet lolbins = dynamic([\n    \"certutil.exe\", \"bitsadmin.exe\", \"mshta.exe\", \"regsvr32.exe\", \"rundll32.exe\",\n    \"msiexec.exe\", \"installutil.exe\", \"msbuild.exe\", \"cmstp.exe\", \"curl.exe\",\n    \"wget.exe\", \"esentutl.exe\", \"expand.exe\", \"extrac32.exe\", \"findstr.exe\",\n    \"hh.exe\", \"ieexec.exe\", \"makecab.exe\", \"print.exe\", \"replace.exe\",\n    \"desktopimgdownldr.exe\", \"certreq.exe\", \"presentationhost.exe\"]);\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where FileName has_any (lolbins)\n| where ProcessCommandLine matches regex @\"(?i)(https?://|ftp://|\\\\\\\\[a-z0-9\\.\\-]+\\\\)\"\n// Exclude Microsoft and other trusted destinations\n| where not(ProcessCommandLine has_any (\n    \"microsoft.com\", \"windowsupdate.com\", \"msedge.net\", \"office.com\",\n    \"office365.com\", \"azureedge.net\", \"digicert.com\", \"verisign.com\",\n    \"symcb.com\", \"sectigo.com\", \"globalsign.com\", \"entrust.net\", \"letsencrypt.org\"))\n| extend RemoteUrl = extract(@\"(?i)(https?://[^\\s\"\"'>]+)\", 1, ProcessCommandLine)\n| extend UncPath   = extract(@\"(\\\\\\\\[^\\s\"\"'>]+)\", 1, ProcessCommandLine)\n| extend WritesToDisk = ProcessCommandLine has_any (\n    \"-urlcache\", \"/urlcache\", \"-decode\", \"/decode\", \"-o \", \"--output\",\n    \"/transfer\", \"-split\", \"OutFile\")\n| extend Severity = iff(WritesToDisk, \"High\", \"Medium\")\n| project TimeGenerated, DeviceName, DeviceId, AccountName, AccountDomain,\n          FileName, FolderPath, ProcessCommandLine, RemoteUrl, UncPath,\n          WritesToDisk, Severity, InitiatingProcessFileName,\n          InitiatingProcessCommandLine, InitiatingProcessParentFileName,\n          ProcessIntegrityLevel, SHA256, ReportId\n| order by TimeGenerated desc\n// TUNING: certutil is used by some PKI scripts and certreq by autoenrolment.\n//         Exclude by AccountName for those service accounts, not by removing\n//         the binary from the list."
+        }
+      ],
+      "T1218.011": [
+        {
+          "id": "CA-020",
+          "name": "LOLBin used to download a remote payload",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet lolbins = dynamic([\n    \"certutil.exe\", \"bitsadmin.exe\", \"mshta.exe\", \"regsvr32.exe\", \"rundll32.exe\",\n    \"msiexec.exe\", \"installutil.exe\", \"msbuild.exe\", \"cmstp.exe\", \"curl.exe\",\n    \"wget.exe\", \"esentutl.exe\", \"expand.exe\", \"extrac32.exe\", \"findstr.exe\",\n    \"hh.exe\", \"ieexec.exe\", \"makecab.exe\", \"print.exe\", \"replace.exe\",\n    \"desktopimgdownldr.exe\", \"certreq.exe\", \"presentationhost.exe\"]);\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where FileName has_any (lolbins)\n| where ProcessCommandLine matches regex @\"(?i)(https?://|ftp://|\\\\\\\\[a-z0-9\\.\\-]+\\\\)\"\n// Exclude Microsoft and other trusted destinations\n| where not(ProcessCommandLine has_any (\n    \"microsoft.com\", \"windowsupdate.com\", \"msedge.net\", \"office.com\",\n    \"office365.com\", \"azureedge.net\", \"digicert.com\", \"verisign.com\",\n    \"symcb.com\", \"sectigo.com\", \"globalsign.com\", \"entrust.net\", \"letsencrypt.org\"))\n| extend RemoteUrl = extract(@\"(?i)(https?://[^\\s\"\"'>]+)\", 1, ProcessCommandLine)\n| extend UncPath   = extract(@\"(\\\\\\\\[^\\s\"\"'>]+)\", 1, ProcessCommandLine)\n| extend WritesToDisk = ProcessCommandLine has_any (\n    \"-urlcache\", \"/urlcache\", \"-decode\", \"/decode\", \"-o \", \"--output\",\n    \"/transfer\", \"-split\", \"OutFile\")\n| extend Severity = iff(WritesToDisk, \"High\", \"Medium\")\n| project TimeGenerated, DeviceName, DeviceId, AccountName, AccountDomain,\n          FileName, FolderPath, ProcessCommandLine, RemoteUrl, UncPath,\n          WritesToDisk, Severity, InitiatingProcessFileName,\n          InitiatingProcessCommandLine, InitiatingProcessParentFileName,\n          ProcessIntegrityLevel, SHA256, ReportId\n| order by TimeGenerated desc\n// TUNING: certutil is used by some PKI scripts and certreq by autoenrolment.\n//         Exclude by AccountName for those service accounts, not by removing\n//         the binary from the list."
+        }
+      ],
+      "T1036.005": [
+        {
+          "id": "CA-021",
+          "name": "Executable dropped into a user-writable directory and then run",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 2h;\nlet write_paths = dynamic([\n    @\"\\appdata\\local\\temp\\\", @\"\\appdata\\roaming\\\", @\"\\users\\public\\\",\n    @\"\\programdata\\\", @\"\\windows\\temp\\\", @\"\\downloads\\\", @\"\\perflogs\\\",\n    @\"\\windows\\tasks\\\", @\"\\$recycle.bin\\\"]);\nlet drops =\n    DeviceFileEvents\n    | where TimeGenerated > ago(lookback)\n    | where ActionType in (\"FileCreated\", \"FileRenamed\", \"FileModified\")\n    | where FileName endswith \".exe\" or FileName endswith \".dll\" or FileName endswith \".scr\"\n    | where FolderPath has_any (write_paths)\n    | where isnotempty(SHA256)\n    | project DropTime = TimeGenerated, DeviceId, DeviceName, SHA256,\n              DroppedFile = FileName, DropPath = FolderPath,\n              DroppedBy = InitiatingProcessFileName,\n              DroppedByCmd = InitiatingProcessCommandLine,\n              DropAccount = InitiatingProcessAccountName;\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where isnotempty(SHA256)\n| join kind=inner drops on DeviceId, SHA256\n| where TimeGenerated >= DropTime\n| extend SecondsToExecution = datetime_diff('second', TimeGenerated, DropTime)\n| project TimeGenerated, DeviceName, DeviceId, AccountName,\n          ExecutedFile = FileName, FolderPath, ProcessCommandLine,\n          DroppedFile, DropPath, DroppedBy, DroppedByCmd, DropAccount,\n          DropTime, SecondsToExecution, SHA256, ReportId\n| order by SecondsToExecution asc\n// TUNING: software installers do exactly this. Exclude DroppedBy in\n//         (\"msiexec.exe\",\"ccmexec.exe\",\"setup.exe\",\"teamsupdate.exe\",\"onedrivesetup.exe\")\n//         and hashes with high global prevalence."
+        },
+        {
+          "id": "CA-022",
+          "name": "Windows binary running from the wrong directory (masquerading)",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet system_binaries = dynamic([\n    \"svchost.exe\", \"lsass.exe\", \"services.exe\", \"csrss.exe\", \"winlogon.exe\",\n    \"smss.exe\", \"wininit.exe\", \"explorer.exe\", \"spoolsv.exe\", \"taskhostw.exe\",\n    \"dllhost.exe\", \"conhost.exe\", \"rundll32.exe\", \"regsvr32.exe\", \"lsaiso.exe\",\n    \"sihost.exe\", \"ctfmon.exe\", \"searchindexer.exe\"]);\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where FileName has_any (system_binaries)\n| where not(FolderPath has_any (\n    @\"c:\\windows\\system32\\\", @\"c:\\windows\\syswow64\\\", @\"c:\\windows\\winsxs\\\",\n    @\"c:\\windows\\explorer.exe\", @\"c:\\windows\\servicing\\\",\n    @\"c:\\program files\\\", @\"c:\\program files (x86)\\\"))\n| project TimeGenerated, DeviceName, DeviceId, AccountName, AccountDomain,\n          FileName, FolderPath, ProcessCommandLine, SHA256, MD5,\n          ProcessIntegrityLevel, InitiatingProcessFileName,\n          InitiatingProcessFolderPath, InitiatingProcessCommandLine, ReportId\n| order by TimeGenerated desc\n// TUNING: near-zero legitimate hits. Any result deserves a look at the hash in\n//         VirusTotal or Defender's file page."
+        }
+      ],
+      "T1574.001": [
+        {
+          "id": "CA-023",
+          "name": "Suspicious DLL loaded from a user-writable path (sideloading)",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 1h;\nDeviceImageLoadEvents\n| where TimeGenerated > ago(lookback)\n| where FileName endswith \".dll\"\n| where FolderPath has_any (\n    @\"\\appdata\\local\\temp\\\", @\"\\appdata\\roaming\\\", @\"\\users\\public\\\",\n    @\"\\programdata\\\", @\"\\downloads\\\", @\"\\windows\\temp\\\", @\"\\perflogs\\\")\n// Signed Microsoft binaries loading DLLs from user paths is the sideload pattern\n| where InitiatingProcessFolderPath has_any (@\"c:\\windows\\\", @\"c:\\program files\")\n| summarize\n    LoadCount    = count(),\n    DevicesSeen  = dcount(DeviceId),\n    Devices      = make_set(DeviceName, 15),\n    FirstSeen    = min(TimeGenerated),\n    LastSeen     = max(TimeGenerated)\n    by FileName, FolderPath, SHA256, InitiatingProcessFileName, InitiatingProcessFolderPath\n| where DevicesSeen <= 5   // rare = interesting\n| order by FirstSeen desc\n// TUNING: some in-house apps ship DLLs under %ProgramData%. Allow-list by SHA256\n//         rather than by path so a swapped DLL still fires."
+        }
+      ],
+      "T1490": [
+        {
+          "id": "CA-026",
+          "name": "Volume shadow copies deleted or backups destroyed",
+          "url": "",
+          "status": "Draft",
+          "sev": "Critical",
+          "note": "",
+          "kql": "let lookback = 15m;\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where (FileName =~ \"vssadmin.exe\" and ProcessCommandLine has_all (\"delete\", \"shadows\"))\n     or (FileName =~ \"wmic.exe\" and ProcessCommandLine has_all (\"shadowcopy\", \"delete\"))\n     or (FileName =~ \"wbadmin.exe\" and ProcessCommandLine has_any (\"delete catalog\", \"delete systemstatebackup\", \"delete backup\"))\n     or (FileName =~ \"bcdedit.exe\" and ProcessCommandLine has_any (\"recoveryenabled no\", \"bootstatuspolicy ignoreallfailures\"))\n     or (FileName in~ (\"powershell.exe\", \"pwsh.exe\")\n         and ProcessCommandLine has_any (\"Get-WmiObject Win32_Shadowcopy\", \"Remove-WmiObject\",\n                                         \"Win32_ShadowCopy\", \"Delete()\"))\n     or (FileName =~ \"diskshadow.exe\" and ProcessCommandLine has \"delete\")\n| project TimeGenerated, DeviceName, DeviceId, AccountName, AccountDomain,\n          FileName, ProcessCommandLine, ProcessIntegrityLevel,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessAccountName, InitiatingProcessParentFileName, ReportId\n| order by TimeGenerated desc\n// TUNING: this is a ransomware precursor. Treat any hit as an incident until\n//         proven otherwise. Backup software may fire - allow-list by the exact\n//         InitiatingProcessFolderPath of your backup agent only."
+        },
+        {
+          "id": "CA-047",
+          "name": "Boot configuration or recovery tampering",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 30m;\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where (FileName =~ \"bcdedit.exe\" and ProcessCommandLine has_any (\n            \"recoveryenabled\", \"bootstatuspolicy\", \"safeboot\", \"/set\", \"/deletevalue\"))\n     or (FileName =~ \"bootcfg.exe\")\n     or (FileName =~ \"cipher.exe\" and ProcessCommandLine has \"/w\")\n     or (FileName =~ \"fsutil.exe\" and ProcessCommandLine has_any (\"usn deletejournal\", \"behavior set\"))\n     or (FileName in~ (\"powershell.exe\", \"pwsh.exe\")\n         and ProcessCommandLine has_any (\"Disable-ComputerRestore\", \"Remove-ComputerRestorePoint\",\n                                         \"Disable-WindowsOptionalFeature -FeatureName Windows-Defender\"))\n| project TimeGenerated, DeviceName, DeviceId, AccountName, AccountDomain,\n          FileName, ProcessCommandLine, ProcessIntegrityLevel,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessParentFileName, InitiatingProcessAccountName, ReportId\n| order by TimeGenerated desc\n// TUNING: dual-boot and imaging workflows use bcdedit. Exclude by DeviceName for\n//         your imaging estate, not by removing the command."
+        }
+      ],
+      "T1003.001": [
+        {
+          "id": "CA-027",
+          "name": "LSASS process memory accessed by an unexpected process",
+          "url": "",
+          "status": "Draft",
+          "sev": "Critical",
+          "note": "",
+          "kql": "let lookback = 15m;\nlet expected_readers = dynamic([\n    \"msmpeng.exe\", \"mssense.exe\", \"sensendr.exe\", \"wmiprvse.exe\", \"taskmgr.exe\",\n    \"csrss.exe\", \"wininit.exe\", \"services.exe\", \"lsass.exe\", \"svchost.exe\",\n    \"procmon.exe\", \"procmon64.exe\", \"vsjitdebugger.exe\"]);\nDeviceEvents\n| where TimeGenerated > ago(lookback)\n| where ActionType in (\"OpenProcessApiCall\", \"ReadProcessMemoryApiCall\",\n                       \"AsrLsassCredentialTheftBlocked\", \"AsrLsassCredentialTheftAudited\")\n| where FileName =~ \"lsass.exe\"\n| where InitiatingProcessFileName !in~ (expected_readers)\n| extend GrantedAccess = tostring(parse_json(AdditionalFields).DesiredAccess)\n| project TimeGenerated, DeviceName, DeviceId, ActionType, GrantedAccess,\n          InitiatingProcessFileName, InitiatingProcessFolderPath,\n          InitiatingProcessCommandLine, InitiatingProcessAccountName,\n          InitiatingProcessParentFileName, InitiatingProcessSHA256,\n          AdditionalFields, ReportId\n| order by TimeGenerated desc\n// TUNING: add your EDR and any legitimate memory-profiling tools to\n//         expected_readers. Everything else here is a genuine finding."
+        },
+        {
+          "id": "CA-028",
+          "name": "Credential dumping via comsvcs.dll, procdump, or registry hive export",
+          "url": "",
+          "status": "Draft",
+          "sev": "Critical",
+          "note": "",
+          "kql": "let lookback = 15m;\nunion isfuzzy=true\n(\n    DeviceProcessEvents\n    | where TimeGenerated > ago(lookback)\n    | where (ProcessCommandLine has \"comsvcs.dll\" and ProcessCommandLine has_any (\"MiniDump\", \"#24\", \"#+24\"))\n         or (FileName has_any (\"procdump.exe\", \"procdump64.exe\") and ProcessCommandLine has_any (\"lsass\", \"-ma\"))\n         or (FileName =~ \"reg.exe\" and ProcessCommandLine has \"save\"\n             and ProcessCommandLine has_any (@\"hklm\\sam\", @\"hklm\\system\", @\"hklm\\security\",\n                                             \"hklm\\\\sam\", \"hklm\\\\system\", \"hklm\\\\security\"))\n         or (FileName =~ \"ntdsutil.exe\" and ProcessCommandLine has_any (\"ifm\", \"create full\"))\n         or (FileName =~ \"esentutl.exe\" and ProcessCommandLine has_any (\"ntds.dit\", \"/y\", \"/vss\"))\n         or (ProcessCommandLine has_any (\"sekurlsa::\", \"lsadump::\", \"privilege::debug\",\n                                         \"Invoke-Mimikatz\", \"DumpCreds\", \"mimikatz\"))\n         or (FileName =~ \"vssadmin.exe\" and ProcessCommandLine has_all (\"create\", \"shadow\"))\n    | extend Vector = strcat(\"Dump command: \", FileName)\n    | extend Artifact = ProcessCommandLine\n    | extend Actor = AccountName\n),\n(\n    DeviceFileEvents\n    | where TimeGenerated > ago(lookback)\n    | where ActionType in (\"FileCreated\", \"FileRenamed\")\n    | where FileName has_any (\"lsass.dmp\", \"lsass.DMP\", \"ntds.dit\", \"SAM\", \"SYSTEM.hiv\",\n                              \"SECURITY.hiv\", \"lsass_dump\", \"dumpert\")\n    | where FolderPath has_any (@\"\\temp\\\", @\"\\appdata\\\", @\"\\users\\public\\\",\n                                @\"\\programdata\\\", @\"\\downloads\\\", @\"\\perflogs\\\")\n    | extend Vector = \"Credential artefact written to disk\"\n    | extend Artifact = strcat(FolderPath, FileName)\n    | extend Actor = InitiatingProcessAccountName\n)\n| project TimeGenerated, DeviceName, DeviceId, Vector, Artifact, Actor,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessFolderPath, ReportId\n| order by TimeGenerated desc\n// TUNING: DC backup jobs use ntdsutil ifm. Allow-list the specific service\n//         account and DC pair, nothing broader."
+        }
+      ],
+      "T1003.002": [
+        {
+          "id": "CA-028",
+          "name": "Credential dumping via comsvcs.dll, procdump, or registry hive export",
+          "url": "",
+          "status": "Draft",
+          "sev": "Critical",
+          "note": "",
+          "kql": "let lookback = 15m;\nunion isfuzzy=true\n(\n    DeviceProcessEvents\n    | where TimeGenerated > ago(lookback)\n    | where (ProcessCommandLine has \"comsvcs.dll\" and ProcessCommandLine has_any (\"MiniDump\", \"#24\", \"#+24\"))\n         or (FileName has_any (\"procdump.exe\", \"procdump64.exe\") and ProcessCommandLine has_any (\"lsass\", \"-ma\"))\n         or (FileName =~ \"reg.exe\" and ProcessCommandLine has \"save\"\n             and ProcessCommandLine has_any (@\"hklm\\sam\", @\"hklm\\system\", @\"hklm\\security\",\n                                             \"hklm\\\\sam\", \"hklm\\\\system\", \"hklm\\\\security\"))\n         or (FileName =~ \"ntdsutil.exe\" and ProcessCommandLine has_any (\"ifm\", \"create full\"))\n         or (FileName =~ \"esentutl.exe\" and ProcessCommandLine has_any (\"ntds.dit\", \"/y\", \"/vss\"))\n         or (ProcessCommandLine has_any (\"sekurlsa::\", \"lsadump::\", \"privilege::debug\",\n                                         \"Invoke-Mimikatz\", \"DumpCreds\", \"mimikatz\"))\n         or (FileName =~ \"vssadmin.exe\" and ProcessCommandLine has_all (\"create\", \"shadow\"))\n    | extend Vector = strcat(\"Dump command: \", FileName)\n    | extend Artifact = ProcessCommandLine\n    | extend Actor = AccountName\n),\n(\n    DeviceFileEvents\n    | where TimeGenerated > ago(lookback)\n    | where ActionType in (\"FileCreated\", \"FileRenamed\")\n    | where FileName has_any (\"lsass.dmp\", \"lsass.DMP\", \"ntds.dit\", \"SAM\", \"SYSTEM.hiv\",\n                              \"SECURITY.hiv\", \"lsass_dump\", \"dumpert\")\n    | where FolderPath has_any (@\"\\temp\\\", @\"\\appdata\\\", @\"\\users\\public\\\",\n                                @\"\\programdata\\\", @\"\\downloads\\\", @\"\\perflogs\\\")\n    | extend Vector = \"Credential artefact written to disk\"\n    | extend Artifact = strcat(FolderPath, FileName)\n    | extend Actor = InitiatingProcessAccountName\n)\n| project TimeGenerated, DeviceName, DeviceId, Vector, Artifact, Actor,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessFolderPath, ReportId\n| order by TimeGenerated desc\n// TUNING: DC backup jobs use ntdsutil ifm. Allow-list the specific service\n//         account and DC pair, nothing broader."
+        }
+      ],
+      "T1003.003": [
+        {
+          "id": "CA-028",
+          "name": "Credential dumping via comsvcs.dll, procdump, or registry hive export",
+          "url": "",
+          "status": "Draft",
+          "sev": "Critical",
+          "note": "",
+          "kql": "let lookback = 15m;\nunion isfuzzy=true\n(\n    DeviceProcessEvents\n    | where TimeGenerated > ago(lookback)\n    | where (ProcessCommandLine has \"comsvcs.dll\" and ProcessCommandLine has_any (\"MiniDump\", \"#24\", \"#+24\"))\n         or (FileName has_any (\"procdump.exe\", \"procdump64.exe\") and ProcessCommandLine has_any (\"lsass\", \"-ma\"))\n         or (FileName =~ \"reg.exe\" and ProcessCommandLine has \"save\"\n             and ProcessCommandLine has_any (@\"hklm\\sam\", @\"hklm\\system\", @\"hklm\\security\",\n                                             \"hklm\\\\sam\", \"hklm\\\\system\", \"hklm\\\\security\"))\n         or (FileName =~ \"ntdsutil.exe\" and ProcessCommandLine has_any (\"ifm\", \"create full\"))\n         or (FileName =~ \"esentutl.exe\" and ProcessCommandLine has_any (\"ntds.dit\", \"/y\", \"/vss\"))\n         or (ProcessCommandLine has_any (\"sekurlsa::\", \"lsadump::\", \"privilege::debug\",\n                                         \"Invoke-Mimikatz\", \"DumpCreds\", \"mimikatz\"))\n         or (FileName =~ \"vssadmin.exe\" and ProcessCommandLine has_all (\"create\", \"shadow\"))\n    | extend Vector = strcat(\"Dump command: \", FileName)\n    | extend Artifact = ProcessCommandLine\n    | extend Actor = AccountName\n),\n(\n    DeviceFileEvents\n    | where TimeGenerated > ago(lookback)\n    | where ActionType in (\"FileCreated\", \"FileRenamed\")\n    | where FileName has_any (\"lsass.dmp\", \"lsass.DMP\", \"ntds.dit\", \"SAM\", \"SYSTEM.hiv\",\n                              \"SECURITY.hiv\", \"lsass_dump\", \"dumpert\")\n    | where FolderPath has_any (@\"\\temp\\\", @\"\\appdata\\\", @\"\\users\\public\\\",\n                                @\"\\programdata\\\", @\"\\downloads\\\", @\"\\perflogs\\\")\n    | extend Vector = \"Credential artefact written to disk\"\n    | extend Artifact = strcat(FolderPath, FileName)\n    | extend Actor = InitiatingProcessAccountName\n)\n| project TimeGenerated, DeviceName, DeviceId, Vector, Artifact, Actor,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessFolderPath, ReportId\n| order by TimeGenerated desc\n// TUNING: DC backup jobs use ntdsutil ifm. Allow-list the specific service\n//         account and DC pair, nothing broader."
+        }
+      ],
+      "T1558.003": [
+        {
+          "id": "CA-029",
+          "name": "Kerberoasting - bulk service ticket requests with weak encryption",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 1h;\nSecurityEvent\n| where TimeGenerated > ago(lookback)\n| where EventID == 4769\n| where TicketEncryptionType in (\"0x17\", \"0x18\")   // RC4 / weak - modern clients use AES\n| where ServiceName !endswith \"$\"                   // exclude machine accounts\n| where ServiceName != \"krbtgt\"\n| where TargetUserName !endswith \"$\"\n| extend ClientIP = tostring(split(IpAddress, \":\")[0])\n| summarize\n    DistinctServices = dcount(ServiceName),\n    Services         = make_set(ServiceName, 40),\n    RequestCount     = count(),\n    SourceIPs        = make_set(ClientIP, 10),\n    FirstSeen        = min(TimeGenerated),\n    LastSeen         = max(TimeGenerated)\n    by TargetUserName, Computer\n| where DistinctServices >= 8\n| order by DistinctServices desc\n// TUNING: requires 4769 collection from DCs. If you do not have that, use\n//         Defender for Identity's built-in Kerberoasting alert via the\n//         SecurityAlert table instead.\n// ALTERNATIVE (MDI, no SecurityEvent needed):\n//   SecurityAlert\n//   | where ProviderName == \"MDATP\" or ProductName has \"Defender for Identity\"\n//   | where AlertName has_any (\"Kerberoasting\", \"Suspected Kerberos SPN exposure\")"
+        }
+      ],
+      "T1552.001": [
+        {
+          "id": "CA-030",
+          "name": "Credentials harvested from browser stores or credential files",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet browser_stores = dynamic([\n    \"Login Data\", \"Login Data For Account\", \"Web Data\", \"Cookies\",\n    \"key4.db\", \"logins.json\", \"signons.sqlite\", \"Local State\"]);\nunion isfuzzy=true\n(\n    DeviceFileEvents\n    | where TimeGenerated > ago(lookback)\n    | where FileName has_any (browser_stores)\n    | where ActionType in (\"FileCreated\", \"FileRenamed\", \"FileModified\")\n    | where InitiatingProcessFileName !in~ (\n        \"chrome.exe\", \"msedge.exe\", \"firefox.exe\", \"brave.exe\", \"opera.exe\",\n        \"msmpeng.exe\", \"mssense.exe\", \"onedrive.exe\", \"explorer.exe\",\n        \"backupagent.exe\", \"svchost.exe\")\n    | extend Vector = \"Browser credential store touched by non-browser process\"\n    | extend Artifact = strcat(FolderPath, FileName)\n),\n(\n    DeviceProcessEvents\n    | where TimeGenerated > ago(lookback)\n    | where ProcessCommandLine has_any (\n        \"Login Data\", \"key4.db\", \"logins.json\", @\"\\Credentials\\\",\n        \"vaultcmd\", \"cmdkey /list\", \"Get-StoredCredential\",\n        \"unattend.xml\", \"sysprep.inf\", \"Groups.xml\", \"SYSVOL\",\n        \"-Password\", \"password.txt\", \"creds.txt\")\n    | where ProcessCommandLine has_any (\"copy\", \"type \", \"cat \", \"Get-Content\",\n                                        \"findstr\", \"Select-String\", \"xcopy\", \"robocopy\")\n    | extend Vector = \"Credential file access via command line\"\n    | extend Artifact = ProcessCommandLine\n    | extend InitiatingProcessAccountName = AccountName\n)\n| project TimeGenerated, DeviceName, DeviceId, Vector, Artifact,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessAccountName, InitiatingProcessFolderPath, ReportId\n| order by TimeGenerated desc\n// TUNING: backup and profile-migration tools read these files. Exclude by the\n//         exact InitiatingProcessFolderPath of the tool."
+        }
+      ],
+      "T1555.003": [
+        {
+          "id": "CA-030",
+          "name": "Credentials harvested from browser stores or credential files",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet browser_stores = dynamic([\n    \"Login Data\", \"Login Data For Account\", \"Web Data\", \"Cookies\",\n    \"key4.db\", \"logins.json\", \"signons.sqlite\", \"Local State\"]);\nunion isfuzzy=true\n(\n    DeviceFileEvents\n    | where TimeGenerated > ago(lookback)\n    | where FileName has_any (browser_stores)\n    | where ActionType in (\"FileCreated\", \"FileRenamed\", \"FileModified\")\n    | where InitiatingProcessFileName !in~ (\n        \"chrome.exe\", \"msedge.exe\", \"firefox.exe\", \"brave.exe\", \"opera.exe\",\n        \"msmpeng.exe\", \"mssense.exe\", \"onedrive.exe\", \"explorer.exe\",\n        \"backupagent.exe\", \"svchost.exe\")\n    | extend Vector = \"Browser credential store touched by non-browser process\"\n    | extend Artifact = strcat(FolderPath, FileName)\n),\n(\n    DeviceProcessEvents\n    | where TimeGenerated > ago(lookback)\n    | where ProcessCommandLine has_any (\n        \"Login Data\", \"key4.db\", \"logins.json\", @\"\\Credentials\\\",\n        \"vaultcmd\", \"cmdkey /list\", \"Get-StoredCredential\",\n        \"unattend.xml\", \"sysprep.inf\", \"Groups.xml\", \"SYSVOL\",\n        \"-Password\", \"password.txt\", \"creds.txt\")\n    | where ProcessCommandLine has_any (\"copy\", \"type \", \"cat \", \"Get-Content\",\n                                        \"findstr\", \"Select-String\", \"xcopy\", \"robocopy\")\n    | extend Vector = \"Credential file access via command line\"\n    | extend Artifact = ProcessCommandLine\n    | extend InitiatingProcessAccountName = AccountName\n)\n| project TimeGenerated, DeviceName, DeviceId, Vector, Artifact,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessAccountName, InitiatingProcessFolderPath, ReportId\n| order by TimeGenerated desc\n// TUNING: backup and profile-migration tools read these files. Exclude by the\n//         exact InitiatingProcessFolderPath of the tool."
+        }
+      ],
+      "T1621": [
+        {
+          "id": "CA-031",
+          "name": "MFA fatigue - repeated push denials followed by an approval",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 6h;\nlet denial_threshold = 5;\nlet denials =\n    SigninLogs\n    | where TimeGenerated > ago(lookback)\n    | where ResultType in (500121, 50074, 50076, 50158)   // MFA denied / not satisfied\n    | summarize\n        DenialCount = count(),\n        FirstDenial = min(TimeGenerated),\n        LastDenial  = max(TimeGenerated),\n        DenialIPs   = make_set(IPAddress, 10)\n        by UserPrincipalName\n    | where DenialCount >= denial_threshold;\nSigninLogs\n| where TimeGenerated > ago(lookback)\n| where ResultType == 0\n| join kind=inner denials on UserPrincipalName\n| where TimeGenerated between (FirstDenial .. (LastDenial + 30m))\n| extend Country = tostring(LocationDetails.countryOrRegion)\n| extend ApprovedFromDenialIP = IPAddress in (DenialIPs)\n| project TimeGenerated, UserPrincipalName, IPAddress, Country, AppDisplayName,\n          ClientAppUsed, DenialCount, FirstDenial, LastDenial, DenialIPs,\n          ApprovedFromDenialIP, ConditionalAccessStatus, RiskLevelDuringSignIn,\n          CorrelationId\n| order by DenialCount desc\n// TUNING: users with broken authenticator apps generate denials too, but they\n//         rarely approve from a different IP. Prioritise ApprovedFromDenialIP."
+        }
+      ],
+      "T1016": [
+        {
+          "id": "CA-032",
+          "name": "Host and domain discovery burst from a single process tree",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet recon_binaries = dynamic([\n    \"whoami.exe\", \"hostname.exe\", \"systeminfo.exe\", \"ipconfig.exe\", \"net.exe\",\n    \"net1.exe\", \"nltest.exe\", \"dsquery.exe\", \"quser.exe\", \"qwinsta.exe\",\n    \"arp.exe\", \"route.exe\", \"netstat.exe\", \"tasklist.exe\", \"nbtstat.exe\",\n    \"wmic.exe\", \"reg.exe\", \"klist.exe\", \"fsutil.exe\", \"driverquery.exe\"]);\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where FileName has_any (recon_binaries)\n   or (FileName in~ (\"powershell.exe\",\"pwsh.exe\")\n       and ProcessCommandLine has_any (\"Get-ADUser\", \"Get-ADComputer\", \"Get-ADGroup\",\n                                       \"Get-DomainUser\", \"Get-NetUser\", \"Get-NetComputer\",\n                                       \"Get-LocalGroupMember\", \"Get-NetSession\",\n                                       \"Get-WmiObject Win32_ComputerSystem\"))\n| summarize\n    DistinctCommands = dcount(FileName),\n    CommandsRun      = make_set(FileName, 25),\n    CommandLines     = make_set(ProcessCommandLine, 30),\n    TotalExecutions  = count(),\n    WindowStart      = min(TimeGenerated),\n    WindowEnd        = max(TimeGenerated)\n    by DeviceName, DeviceId, AccountName, InitiatingProcessFileName,\n       InitiatingProcessId, bin(TimeGenerated, 10m)\n| where DistinctCommands >= 6\n| extend DurationSeconds = datetime_diff('second', WindowEnd, WindowStart)\n| order by DistinctCommands desc\n// TUNING: logon scripts and inventory agents run these in bursts. Exclude by\n//         InitiatingProcessFileName in (\"ccmexec.exe\",\"gpscript.exe\",\"userinit.exe\")."
+        }
+      ],
+      "T1018": [
+        {
+          "id": "CA-032",
+          "name": "Host and domain discovery burst from a single process tree",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet recon_binaries = dynamic([\n    \"whoami.exe\", \"hostname.exe\", \"systeminfo.exe\", \"ipconfig.exe\", \"net.exe\",\n    \"net1.exe\", \"nltest.exe\", \"dsquery.exe\", \"quser.exe\", \"qwinsta.exe\",\n    \"arp.exe\", \"route.exe\", \"netstat.exe\", \"tasklist.exe\", \"nbtstat.exe\",\n    \"wmic.exe\", \"reg.exe\", \"klist.exe\", \"fsutil.exe\", \"driverquery.exe\"]);\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where FileName has_any (recon_binaries)\n   or (FileName in~ (\"powershell.exe\",\"pwsh.exe\")\n       and ProcessCommandLine has_any (\"Get-ADUser\", \"Get-ADComputer\", \"Get-ADGroup\",\n                                       \"Get-DomainUser\", \"Get-NetUser\", \"Get-NetComputer\",\n                                       \"Get-LocalGroupMember\", \"Get-NetSession\",\n                                       \"Get-WmiObject Win32_ComputerSystem\"))\n| summarize\n    DistinctCommands = dcount(FileName),\n    CommandsRun      = make_set(FileName, 25),\n    CommandLines     = make_set(ProcessCommandLine, 30),\n    TotalExecutions  = count(),\n    WindowStart      = min(TimeGenerated),\n    WindowEnd        = max(TimeGenerated)\n    by DeviceName, DeviceId, AccountName, InitiatingProcessFileName,\n       InitiatingProcessId, bin(TimeGenerated, 10m)\n| where DistinctCommands >= 6\n| extend DurationSeconds = datetime_diff('second', WindowEnd, WindowStart)\n| order by DistinctCommands desc\n// TUNING: logon scripts and inventory agents run these in bursts. Exclude by\n//         InitiatingProcessFileName in (\"ccmexec.exe\",\"gpscript.exe\",\"userinit.exe\")."
+        }
+      ],
+      "T1082": [
+        {
+          "id": "CA-032",
+          "name": "Host and domain discovery burst from a single process tree",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet recon_binaries = dynamic([\n    \"whoami.exe\", \"hostname.exe\", \"systeminfo.exe\", \"ipconfig.exe\", \"net.exe\",\n    \"net1.exe\", \"nltest.exe\", \"dsquery.exe\", \"quser.exe\", \"qwinsta.exe\",\n    \"arp.exe\", \"route.exe\", \"netstat.exe\", \"tasklist.exe\", \"nbtstat.exe\",\n    \"wmic.exe\", \"reg.exe\", \"klist.exe\", \"fsutil.exe\", \"driverquery.exe\"]);\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where FileName has_any (recon_binaries)\n   or (FileName in~ (\"powershell.exe\",\"pwsh.exe\")\n       and ProcessCommandLine has_any (\"Get-ADUser\", \"Get-ADComputer\", \"Get-ADGroup\",\n                                       \"Get-DomainUser\", \"Get-NetUser\", \"Get-NetComputer\",\n                                       \"Get-LocalGroupMember\", \"Get-NetSession\",\n                                       \"Get-WmiObject Win32_ComputerSystem\"))\n| summarize\n    DistinctCommands = dcount(FileName),\n    CommandsRun      = make_set(FileName, 25),\n    CommandLines     = make_set(ProcessCommandLine, 30),\n    TotalExecutions  = count(),\n    WindowStart      = min(TimeGenerated),\n    WindowEnd        = max(TimeGenerated)\n    by DeviceName, DeviceId, AccountName, InitiatingProcessFileName,\n       InitiatingProcessId, bin(TimeGenerated, 10m)\n| where DistinctCommands >= 6\n| extend DurationSeconds = datetime_diff('second', WindowEnd, WindowStart)\n| order by DistinctCommands desc\n// TUNING: logon scripts and inventory agents run these in bursts. Exclude by\n//         InitiatingProcessFileName in (\"ccmexec.exe\",\"gpscript.exe\",\"userinit.exe\")."
+        }
+      ],
+      "T1087.002": [
+        {
+          "id": "CA-032",
+          "name": "Host and domain discovery burst from a single process tree",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet recon_binaries = dynamic([\n    \"whoami.exe\", \"hostname.exe\", \"systeminfo.exe\", \"ipconfig.exe\", \"net.exe\",\n    \"net1.exe\", \"nltest.exe\", \"dsquery.exe\", \"quser.exe\", \"qwinsta.exe\",\n    \"arp.exe\", \"route.exe\", \"netstat.exe\", \"tasklist.exe\", \"nbtstat.exe\",\n    \"wmic.exe\", \"reg.exe\", \"klist.exe\", \"fsutil.exe\", \"driverquery.exe\"]);\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where FileName has_any (recon_binaries)\n   or (FileName in~ (\"powershell.exe\",\"pwsh.exe\")\n       and ProcessCommandLine has_any (\"Get-ADUser\", \"Get-ADComputer\", \"Get-ADGroup\",\n                                       \"Get-DomainUser\", \"Get-NetUser\", \"Get-NetComputer\",\n                                       \"Get-LocalGroupMember\", \"Get-NetSession\",\n                                       \"Get-WmiObject Win32_ComputerSystem\"))\n| summarize\n    DistinctCommands = dcount(FileName),\n    CommandsRun      = make_set(FileName, 25),\n    CommandLines     = make_set(ProcessCommandLine, 30),\n    TotalExecutions  = count(),\n    WindowStart      = min(TimeGenerated),\n    WindowEnd        = max(TimeGenerated)\n    by DeviceName, DeviceId, AccountName, InitiatingProcessFileName,\n       InitiatingProcessId, bin(TimeGenerated, 10m)\n| where DistinctCommands >= 6\n| extend DurationSeconds = datetime_diff('second', WindowEnd, WindowStart)\n| order by DistinctCommands desc\n// TUNING: logon scripts and inventory agents run these in bursts. Exclude by\n//         InitiatingProcessFileName in (\"ccmexec.exe\",\"gpscript.exe\",\"userinit.exe\")."
+        }
+      ],
+      "T1069.002": [
+        {
+          "id": "CA-033",
+          "name": "Domain trust and privileged group enumeration",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 1h;\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where (FileName =~ \"nltest.exe\" and ProcessCommandLine has_any (\"/domain_trusts\", \"/dclist\", \"/dsgetdc\"))\n     or (FileName in~ (\"net.exe\", \"net1.exe\")\n         and ProcessCommandLine has_any (\"group \\\"domain admins\\\"\", \"group \\\"enterprise admins\\\"\",\n                                         \"group \\\"domain controllers\\\"\", \"localgroup administrators\",\n                                         \"group /domain\", \"user /domain\", \"accounts /domain\"))\n     or (FileName =~ \"dsquery.exe\" and ProcessCommandLine has_any (\"group\", \"user\", \"server\", \"*\"))\n     or (FileName in~ (\"powershell.exe\", \"pwsh.exe\")\n         and ProcessCommandLine has_any (\"Get-ADTrust\", \"Get-DomainTrust\", \"Get-ADDomain\",\n                                         \"Get-ADGroupMember -Identity \\\"Domain Admins\\\"\",\n                                         \"Get-NetDomainTrust\", \"Get-ADForest\"))\n     or (ProcessCommandLine has_any (\"SharpHound\", \"BloodHound\", \"Invoke-BloodHound\",\n                                     \"Get-BloodHoundData\", \"adexplorer\"))\n| extend LikelyTooling = ProcessCommandLine has_any (\"SharpHound\", \"BloodHound\", \"adexplorer\")\n| extend Severity = iff(LikelyTooling, \"High\", \"Medium\")\n| project TimeGenerated, DeviceName, DeviceId, AccountName, AccountDomain,\n          FileName, ProcessCommandLine, LikelyTooling, Severity,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessParentFileName, ReportId\n| order by TimeGenerated desc\n// TUNING: your own AD admins run these. Exclude by AccountName for the tier-0\n//         admin accounts and by DeviceName for admin jump hosts."
+        }
+      ],
+      "T1482": [
+        {
+          "id": "CA-033",
+          "name": "Domain trust and privileged group enumeration",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 1h;\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where (FileName =~ \"nltest.exe\" and ProcessCommandLine has_any (\"/domain_trusts\", \"/dclist\", \"/dsgetdc\"))\n     or (FileName in~ (\"net.exe\", \"net1.exe\")\n         and ProcessCommandLine has_any (\"group \\\"domain admins\\\"\", \"group \\\"enterprise admins\\\"\",\n                                         \"group \\\"domain controllers\\\"\", \"localgroup administrators\",\n                                         \"group /domain\", \"user /domain\", \"accounts /domain\"))\n     or (FileName =~ \"dsquery.exe\" and ProcessCommandLine has_any (\"group\", \"user\", \"server\", \"*\"))\n     or (FileName in~ (\"powershell.exe\", \"pwsh.exe\")\n         and ProcessCommandLine has_any (\"Get-ADTrust\", \"Get-DomainTrust\", \"Get-ADDomain\",\n                                         \"Get-ADGroupMember -Identity \\\"Domain Admins\\\"\",\n                                         \"Get-NetDomainTrust\", \"Get-ADForest\"))\n     or (ProcessCommandLine has_any (\"SharpHound\", \"BloodHound\", \"Invoke-BloodHound\",\n                                     \"Get-BloodHoundData\", \"adexplorer\"))\n| extend LikelyTooling = ProcessCommandLine has_any (\"SharpHound\", \"BloodHound\", \"adexplorer\")\n| extend Severity = iff(LikelyTooling, \"High\", \"Medium\")\n| project TimeGenerated, DeviceName, DeviceId, AccountName, AccountDomain,\n          FileName, ProcessCommandLine, LikelyTooling, Severity,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessParentFileName, ReportId\n| order by TimeGenerated desc\n// TUNING: your own AD admins run these. Exclude by AccountName for the tier-0\n//         admin accounts and by DeviceName for admin jump hosts."
+        }
+      ],
+      "T1021.002": [
+        {
+          "id": "CA-034",
+          "name": "Remote service execution (PsExec-style) against internal hosts",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 1h;\nunion isfuzzy=true\n(\n    DeviceProcessEvents\n    | where TimeGenerated > ago(lookback)\n    | where FileName has_any (\"psexec.exe\", \"psexec64.exe\", \"paexec.exe\",\n                              \"psexesvc.exe\", \"remcom.exe\", \"csexec.exe\")\n         or ProcessCommandLine has_any (\"psexec\", @\"-accepteula\", \"PAExec\")\n         or (FileName in~ (\"net.exe\",\"net1.exe\") and ProcessCommandLine has_all (\"use\", @\"\\\\\") and ProcessCommandLine has_any (@\"\\admin$\", @\"\\c$\", @\"\\ipc$\"))\n    | extend Vector = \"Remote exec tooling\"\n    | extend Artifact = ProcessCommandLine\n    | extend Actor = AccountName\n),\n(\n    DeviceFileEvents\n    | where TimeGenerated > ago(lookback)\n    | where FolderPath has_any (@\"\\ADMIN$\\\", @\"\\C$\\Windows\\\", @\"c:\\windows\\\")\n    | where FileName endswith \".exe\" or FileName endswith \".dll\" or FileName endswith \".bat\"\n    | where InitiatingProcessFileName =~ \"System\" or InitiatingProcessFileName =~ \"services.exe\"\n    | extend Vector = \"Binary written to admin share\"\n    | extend Artifact = strcat(FolderPath, FileName)\n    | extend Actor = InitiatingProcessAccountName\n)\n| project TimeGenerated, DeviceName, DeviceId, Vector, Artifact, Actor,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessAccountName, ReportId\n| order by TimeGenerated desc\n// TUNING: some deployment tooling uses PsExec. Allow-list by the SHA256 of your\n//         approved copy plus the specific service account running it."
+        }
+      ],
+      "T1570": [
+        {
+          "id": "CA-034",
+          "name": "Remote service execution (PsExec-style) against internal hosts",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 1h;\nunion isfuzzy=true\n(\n    DeviceProcessEvents\n    | where TimeGenerated > ago(lookback)\n    | where FileName has_any (\"psexec.exe\", \"psexec64.exe\", \"paexec.exe\",\n                              \"psexesvc.exe\", \"remcom.exe\", \"csexec.exe\")\n         or ProcessCommandLine has_any (\"psexec\", @\"-accepteula\", \"PAExec\")\n         or (FileName in~ (\"net.exe\",\"net1.exe\") and ProcessCommandLine has_all (\"use\", @\"\\\\\") and ProcessCommandLine has_any (@\"\\admin$\", @\"\\c$\", @\"\\ipc$\"))\n    | extend Vector = \"Remote exec tooling\"\n    | extend Artifact = ProcessCommandLine\n    | extend Actor = AccountName\n),\n(\n    DeviceFileEvents\n    | where TimeGenerated > ago(lookback)\n    | where FolderPath has_any (@\"\\ADMIN$\\\", @\"\\C$\\Windows\\\", @\"c:\\windows\\\")\n    | where FileName endswith \".exe\" or FileName endswith \".dll\" or FileName endswith \".bat\"\n    | where InitiatingProcessFileName =~ \"System\" or InitiatingProcessFileName =~ \"services.exe\"\n    | extend Vector = \"Binary written to admin share\"\n    | extend Artifact = strcat(FolderPath, FileName)\n    | extend Actor = InitiatingProcessAccountName\n)\n| project TimeGenerated, DeviceName, DeviceId, Vector, Artifact, Actor,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessAccountName, ReportId\n| order by TimeGenerated desc\n// TUNING: some deployment tooling uses PsExec. Allow-list by the SHA256 of your\n//         approved copy plus the specific service account running it."
+        }
+      ],
+      "T1021": [
+        {
+          "id": "CA-035",
+          "name": "One account authenticating to an unusual number of hosts",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet baseline_period = 14d;\nlet baseline =\n    DeviceLogonEvents\n    | where TimeGenerated between (ago(baseline_period) .. ago(lookback))\n    | where ActionType == \"LogonSuccess\"\n    | where LogonType in (\"Network\", \"RemoteInteractive\", \"Batch\", \"Service\")\n    | summarize HostsPerHour = dcount(DeviceId) by AccountName, bin(TimeGenerated, 1h)\n    | summarize BaselineAvg = avg(HostsPerHour), BaselineMax = max(HostsPerHour)\n      by AccountName;\nDeviceLogonEvents\n| where TimeGenerated > ago(lookback)\n| where ActionType == \"LogonSuccess\"\n| where LogonType in (\"Network\", \"RemoteInteractive\", \"Batch\", \"Service\")\n| summarize\n    HostsTouched = dcount(DeviceId),\n    Hosts        = make_set(DeviceName, 40),\n    LogonTypes   = make_set(LogonType, 5),\n    SourceIPs    = make_set(RemoteIP, 15),\n    FirstSeen    = min(TimeGenerated),\n    LastSeen     = max(TimeGenerated)\n    by AccountName, AccountDomain\n| join kind=leftouter baseline on AccountName\n| extend BaselineMax = coalesce(BaselineMax, 0.0)\n| where HostsTouched > 10 and HostsTouched > (BaselineMax * 3)\n| project AccountName, AccountDomain, HostsTouched, BaselineAvg, BaselineMax,\n          Hosts, LogonTypes, SourceIPs, FirstSeen, LastSeen\n| order by HostsTouched desc\n// TUNING: vulnerability scanners and backup accounts touch everything. Exclude\n//         those AccountNames explicitly - the baseline join will not save you\n//         because their baseline is already high."
+        }
+      ],
+      "T1078.002": [
+        {
+          "id": "CA-035",
+          "name": "One account authenticating to an unusual number of hosts",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet baseline_period = 14d;\nlet baseline =\n    DeviceLogonEvents\n    | where TimeGenerated between (ago(baseline_period) .. ago(lookback))\n    | where ActionType == \"LogonSuccess\"\n    | where LogonType in (\"Network\", \"RemoteInteractive\", \"Batch\", \"Service\")\n    | summarize HostsPerHour = dcount(DeviceId) by AccountName, bin(TimeGenerated, 1h)\n    | summarize BaselineAvg = avg(HostsPerHour), BaselineMax = max(HostsPerHour)\n      by AccountName;\nDeviceLogonEvents\n| where TimeGenerated > ago(lookback)\n| where ActionType == \"LogonSuccess\"\n| where LogonType in (\"Network\", \"RemoteInteractive\", \"Batch\", \"Service\")\n| summarize\n    HostsTouched = dcount(DeviceId),\n    Hosts        = make_set(DeviceName, 40),\n    LogonTypes   = make_set(LogonType, 5),\n    SourceIPs    = make_set(RemoteIP, 15),\n    FirstSeen    = min(TimeGenerated),\n    LastSeen     = max(TimeGenerated)\n    by AccountName, AccountDomain\n| join kind=leftouter baseline on AccountName\n| extend BaselineMax = coalesce(BaselineMax, 0.0)\n| where HostsTouched > 10 and HostsTouched > (BaselineMax * 3)\n| project AccountName, AccountDomain, HostsTouched, BaselineAvg, BaselineMax,\n          Hosts, LogonTypes, SourceIPs, FirstSeen, LastSeen\n| order by HostsTouched desc\n// TUNING: vulnerability scanners and backup accounts touch everything. Exclude\n//         those AccountNames explicitly - the baseline join will not save you\n//         because their baseline is already high."
+        }
+      ],
+      "T1074.001": [
+        {
+          "id": "CA-036",
+          "name": "Mass file staging into an archive",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 1h;\nunion isfuzzy=true\n(\n    DeviceProcessEvents\n    | where TimeGenerated > ago(lookback)\n    | where FileName has_any (\"7z.exe\", \"7za.exe\", \"winrar.exe\", \"rar.exe\",\n                              \"zip.exe\", \"tar.exe\", \"makecab.exe\", \"wzzip.exe\")\n         or (FileName in~ (\"powershell.exe\",\"pwsh.exe\")\n             and ProcessCommandLine has_any (\"Compress-Archive\", \"ZipFile]::CreateFromDirectory\"))\n    | where ProcessCommandLine has_any (\"-p\", \"-hp\", \"-r\", \"-m5\", \"-v\", \"a \", \"-t7z\", \"-tzip\")\n         or ProcessCommandLine has_any (@\"\\users\\\", @\"\\documents\\\", @\"\\desktop\\\",\n                                        @\"\\downloads\\\", @\"\\shares\\\", @\"\\finance\", @\"\\hr\")\n    | extend PasswordProtected = ProcessCommandLine has_any (\"-p\", \"-hp\")\n    | extend Split = ProcessCommandLine has_any (\"-v\", \"-volume\")\n    | extend Vector = \"Archive utility\"\n    | extend Artifact = ProcessCommandLine\n    | extend Actor = AccountName\n),\n(\n    DeviceFileEvents\n    | where TimeGenerated > ago(lookback)\n    | where ActionType == \"FileCreated\"\n    | where FileName has_any (\".7z\", \".rar\", \".zip\", \".tar\", \".gz\", \".cab\", \".iso\")\n    | where FolderPath has_any (@\"\\appdata\\\", @\"\\programdata\\\", @\"\\users\\public\\\",\n                                @\"\\temp\\\", @\"\\perflogs\\\", @\"\\$recycle.bin\\\")\n    | extend PasswordProtected = false, Split = false\n    | extend Vector = \"Archive written to staging path\"\n    | extend Artifact = strcat(FolderPath, FileName)\n    | extend Actor = InitiatingProcessAccountName\n)\n| project TimeGenerated, DeviceName, DeviceId, Vector, Artifact, Actor,\n          PasswordProtected, Split, InitiatingProcessFileName,\n          InitiatingProcessCommandLine, ReportId\n| order by TimeGenerated desc\n// TUNING: developers zip things constantly. Consider restricting the file-event\n//         branch to servers and to archives over a size threshold."
+        }
+      ],
+      "T1560.001": [
+        {
+          "id": "CA-036",
+          "name": "Mass file staging into an archive",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 1h;\nunion isfuzzy=true\n(\n    DeviceProcessEvents\n    | where TimeGenerated > ago(lookback)\n    | where FileName has_any (\"7z.exe\", \"7za.exe\", \"winrar.exe\", \"rar.exe\",\n                              \"zip.exe\", \"tar.exe\", \"makecab.exe\", \"wzzip.exe\")\n         or (FileName in~ (\"powershell.exe\",\"pwsh.exe\")\n             and ProcessCommandLine has_any (\"Compress-Archive\", \"ZipFile]::CreateFromDirectory\"))\n    | where ProcessCommandLine has_any (\"-p\", \"-hp\", \"-r\", \"-m5\", \"-v\", \"a \", \"-t7z\", \"-tzip\")\n         or ProcessCommandLine has_any (@\"\\users\\\", @\"\\documents\\\", @\"\\desktop\\\",\n                                        @\"\\downloads\\\", @\"\\shares\\\", @\"\\finance\", @\"\\hr\")\n    | extend PasswordProtected = ProcessCommandLine has_any (\"-p\", \"-hp\")\n    | extend Split = ProcessCommandLine has_any (\"-v\", \"-volume\")\n    | extend Vector = \"Archive utility\"\n    | extend Artifact = ProcessCommandLine\n    | extend Actor = AccountName\n),\n(\n    DeviceFileEvents\n    | where TimeGenerated > ago(lookback)\n    | where ActionType == \"FileCreated\"\n    | where FileName has_any (\".7z\", \".rar\", \".zip\", \".tar\", \".gz\", \".cab\", \".iso\")\n    | where FolderPath has_any (@\"\\appdata\\\", @\"\\programdata\\\", @\"\\users\\public\\\",\n                                @\"\\temp\\\", @\"\\perflogs\\\", @\"\\$recycle.bin\\\")\n    | extend PasswordProtected = false, Split = false\n    | extend Vector = \"Archive written to staging path\"\n    | extend Artifact = strcat(FolderPath, FileName)\n    | extend Actor = InitiatingProcessAccountName\n)\n| project TimeGenerated, DeviceName, DeviceId, Vector, Artifact, Actor,\n          PasswordProtected, Split, InitiatingProcessFileName,\n          InitiatingProcessCommandLine, ReportId\n| order by TimeGenerated desc\n// TUNING: developers zip things constantly. Consider restricting the file-event\n//         branch to servers and to archives over a size threshold."
+        }
+      ],
+      "T1098.002": [
+        {
+          "id": "CA-037",
+          "name": "Mailbox delegate or application impersonation granted",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 1h;\nOfficeActivity\n| where TimeGenerated > ago(lookback)\n| where OfficeWorkload =~ \"Exchange\"\n| where Operation in~ (\"Add-MailboxPermission\", \"Add-RecipientPermission\",\n                       \"Add-MailboxFolderPermission\", \"New-ManagementRoleAssignment\",\n                       \"Set-MailboxFolderPermission\", \"AddFolderPermissions\")\n| extend Params = tostring(Parameters)\n| where Params has_any (\"FullAccess\", \"SendAs\", \"SendOnBehalf\", \"Owner\",\n                        \"ApplicationImpersonation\", \"Editor\")\n| extend TargetMailbox = extract(@\"(?i)\"\"Name\"\"\\s*:\\s*\"\"Identity\"\"\\s*,\\s*\"\"Value\"\"\\s*:\\s*\"\"([^\"\"]+)\"\"\", 1, Params)\n| extend GrantedTo     = extract(@\"(?i)\"\"Name\"\"\\s*:\\s*\"\"User\"\"\\s*,\\s*\"\"Value\"\"\\s*:\\s*\"\"([^\"\"]+)\"\"\", 1, Params)\n| extend HighRisk      = Params has_any (\"ApplicationImpersonation\", \"FullAccess\", \"SendAs\")\n| project TimeGenerated, UserId, ClientIP, Operation, TargetMailbox, GrantedTo,\n          HighRisk, ResultStatus, Params\n| order by TimeGenerated desc\n// TUNING: shared mailbox onboarding fires this. Exclude by UserId for the\n//         helpdesk automation account and correlate with a ticket reference."
+        }
+      ],
+      "T1114.002": [
+        {
+          "id": "CA-037",
+          "name": "Mailbox delegate or application impersonation granted",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 1h;\nOfficeActivity\n| where TimeGenerated > ago(lookback)\n| where OfficeWorkload =~ \"Exchange\"\n| where Operation in~ (\"Add-MailboxPermission\", \"Add-RecipientPermission\",\n                       \"Add-MailboxFolderPermission\", \"New-ManagementRoleAssignment\",\n                       \"Set-MailboxFolderPermission\", \"AddFolderPermissions\")\n| extend Params = tostring(Parameters)\n| where Params has_any (\"FullAccess\", \"SendAs\", \"SendOnBehalf\", \"Owner\",\n                        \"ApplicationImpersonation\", \"Editor\")\n| extend TargetMailbox = extract(@\"(?i)\"\"Name\"\"\\s*:\\s*\"\"Identity\"\"\\s*,\\s*\"\"Value\"\"\\s*:\\s*\"\"([^\"\"]+)\"\"\", 1, Params)\n| extend GrantedTo     = extract(@\"(?i)\"\"Name\"\"\\s*:\\s*\"\"User\"\"\\s*,\\s*\"\"Value\"\"\\s*:\\s*\"\"([^\"\"]+)\"\"\", 1, Params)\n| extend HighRisk      = Params has_any (\"ApplicationImpersonation\", \"FullAccess\", \"SendAs\")\n| project TimeGenerated, UserId, ClientIP, Operation, TargetMailbox, GrantedTo,\n          HighRisk, ResultStatus, Params\n| order by TimeGenerated desc\n// TUNING: shared mailbox onboarding fires this. Exclude by UserId for the\n//         helpdesk automation account and correlate with a ticket reference."
+        }
+      ],
+      "T1071.001": [
+        {
+          "id": "CA-038",
+          "name": "Beaconing - regular-interval outbound connections",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 24h;\nlet min_connections = 30;\nlet max_jitter_ratio = 0.15;\nDeviceNetworkEvents\n| where TimeGenerated > ago(lookback)\n| where ActionType == \"ConnectionSuccess\"\n| where isnotempty(RemoteIP)\n| where not(ipv4_is_private(RemoteIP))\n| where RemotePort in (80, 443, 8080, 8443, 53, 22, 4444, 8000)\n| where not(RemoteUrl has_any (\n    \"microsoft.com\", \"windowsupdate.com\", \"msftconnecttest.com\", \"office.com\",\n    \"office365.com\", \"azureedge.net\", \"akamai\", \"google.com\", \"gstatic.com\",\n    \"cloudflare.com\", \"digicert.com\", \"msedge.net\", \"live.com\", \"sharepoint.com\"))\n| sort by DeviceId asc, RemoteIP asc, TimeGenerated asc\n| extend PrevTime = prev(TimeGenerated), PrevDevice = prev(DeviceId), PrevRemote = prev(RemoteIP)\n| where DeviceId == PrevDevice and RemoteIP == PrevRemote\n| extend DeltaSeconds = datetime_diff('second', TimeGenerated, PrevTime)\n| where DeltaSeconds between (5 .. 7200)\n| summarize\n    ConnectionCount = count(),\n    AvgInterval     = avg(DeltaSeconds),\n    StdDevInterval  = stdev(DeltaSeconds),\n    MinInterval     = min(DeltaSeconds),\n    MaxInterval     = max(DeltaSeconds),\n    Ports           = make_set(RemotePort, 10),\n    Urls            = make_set(RemoteUrl, 10),\n    FirstSeen       = min(TimeGenerated),\n    LastSeen        = max(TimeGenerated)\n    by DeviceName, DeviceId, RemoteIP, InitiatingProcessFileName,\n       InitiatingProcessFolderPath, InitiatingProcessCommandLine\n| where ConnectionCount >= min_connections\n| extend JitterRatio = round(StdDevInterval / AvgInterval, 3)\n| where JitterRatio < max_jitter_ratio    // low jitter = machine-timed = beacon\n| extend GeoInfo = geo_info_from_ip_address(RemoteIP)\n| extend Country = tostring(GeoInfo.country)\n| project DeviceName, DeviceId, RemoteIP, Country, InitiatingProcessFileName,\n          InitiatingProcessFolderPath, InitiatingProcessCommandLine,\n          ConnectionCount, AvgInterval, StdDevInterval, JitterRatio,\n          Ports, Urls, FirstSeen, LastSeen\n| order by JitterRatio asc, ConnectionCount desc\n// TUNING: telemetry agents beacon perfectly too. Build an allow-list keyed on\n//         InitiatingProcessFolderPath, and keep RemoteIP out of it so a hijacked\n//         agent still surfaces."
+        }
+      ],
+      "T1573": [
+        {
+          "id": "CA-038",
+          "name": "Beaconing - regular-interval outbound connections",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 24h;\nlet min_connections = 30;\nlet max_jitter_ratio = 0.15;\nDeviceNetworkEvents\n| where TimeGenerated > ago(lookback)\n| where ActionType == \"ConnectionSuccess\"\n| where isnotempty(RemoteIP)\n| where not(ipv4_is_private(RemoteIP))\n| where RemotePort in (80, 443, 8080, 8443, 53, 22, 4444, 8000)\n| where not(RemoteUrl has_any (\n    \"microsoft.com\", \"windowsupdate.com\", \"msftconnecttest.com\", \"office.com\",\n    \"office365.com\", \"azureedge.net\", \"akamai\", \"google.com\", \"gstatic.com\",\n    \"cloudflare.com\", \"digicert.com\", \"msedge.net\", \"live.com\", \"sharepoint.com\"))\n| sort by DeviceId asc, RemoteIP asc, TimeGenerated asc\n| extend PrevTime = prev(TimeGenerated), PrevDevice = prev(DeviceId), PrevRemote = prev(RemoteIP)\n| where DeviceId == PrevDevice and RemoteIP == PrevRemote\n| extend DeltaSeconds = datetime_diff('second', TimeGenerated, PrevTime)\n| where DeltaSeconds between (5 .. 7200)\n| summarize\n    ConnectionCount = count(),\n    AvgInterval     = avg(DeltaSeconds),\n    StdDevInterval  = stdev(DeltaSeconds),\n    MinInterval     = min(DeltaSeconds),\n    MaxInterval     = max(DeltaSeconds),\n    Ports           = make_set(RemotePort, 10),\n    Urls            = make_set(RemoteUrl, 10),\n    FirstSeen       = min(TimeGenerated),\n    LastSeen        = max(TimeGenerated)\n    by DeviceName, DeviceId, RemoteIP, InitiatingProcessFileName,\n       InitiatingProcessFolderPath, InitiatingProcessCommandLine\n| where ConnectionCount >= min_connections\n| extend JitterRatio = round(StdDevInterval / AvgInterval, 3)\n| where JitterRatio < max_jitter_ratio    // low jitter = machine-timed = beacon\n| extend GeoInfo = geo_info_from_ip_address(RemoteIP)\n| extend Country = tostring(GeoInfo.country)\n| project DeviceName, DeviceId, RemoteIP, Country, InitiatingProcessFileName,\n          InitiatingProcessFolderPath, InitiatingProcessCommandLine,\n          ConnectionCount, AvgInterval, StdDevInterval, JitterRatio,\n          Ports, Urls, FirstSeen, LastSeen\n| order by JitterRatio asc, ConnectionCount desc\n// TUNING: telemetry agents beacon perfectly too. Build an allow-list keyed on\n//         InitiatingProcessFolderPath, and keep RemoteIP out of it so a hijacked\n//         agent still surfaces."
+        }
+      ],
+      "T1090": [
+        {
+          "id": "CA-039",
+          "name": "Remote monitoring / tunnelling tool executed",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet rmm_tools = dynamic([\n    \"anydesk.exe\", \"teamviewer.exe\", \"tv_w32.exe\", \"tv_x64.exe\", \"screenconnect\",\n    \"connectwisecontrol\", \"atera\", \"syncro\", \"splashtop\", \"logmein\", \"gotoassist\",\n    \"dwagent\", \"rustdesk.exe\", \"ammyy\", \"supremo\", \"netsupport\", \"remoteutilities\",\n    \"vncserver.exe\", \"winvnc.exe\", \"tightvnc\", \"ultravnc\", \"radmin.exe\",\n    \"ngrok.exe\", \"frpc.exe\", \"frps.exe\", \"chisel.exe\", \"cloudflared.exe\",\n    \"plink.exe\", \"putty.exe\", \"socat.exe\", \"gost.exe\", \"iodine.exe\", \"dnscat\"]);\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where FileName has_any (rmm_tools) or FolderPath has_any (rmm_tools)\n   or ProcessCommandLine has_any (rmm_tools)\n   or (FileName =~ \"ssh.exe\" and ProcessCommandLine has_any (\" -R \", \" -L \", \" -D \", \"-N \"))\n| extend TunnelFlags = ProcessCommandLine has_any (\" -R \", \" -L \", \" -D \", \"tcp \", \"http \", \"--remote\")\n| project TimeGenerated, DeviceName, DeviceId, AccountName, AccountDomain,\n          FileName, FolderPath, ProcessCommandLine, TunnelFlags,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessAccountName, SHA256, ReportId\n| order by TimeGenerated desc\n// TUNING: if your helpdesk uses one of these, remove it from rmm_tools and write\n//         a separate rule for that tool running outside helpdesk hours or from a\n//         non-standard install path."
+        }
+      ],
+      "T1219": [
+        {
+          "id": "CA-039",
+          "name": "Remote monitoring / tunnelling tool executed",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet rmm_tools = dynamic([\n    \"anydesk.exe\", \"teamviewer.exe\", \"tv_w32.exe\", \"tv_x64.exe\", \"screenconnect\",\n    \"connectwisecontrol\", \"atera\", \"syncro\", \"splashtop\", \"logmein\", \"gotoassist\",\n    \"dwagent\", \"rustdesk.exe\", \"ammyy\", \"supremo\", \"netsupport\", \"remoteutilities\",\n    \"vncserver.exe\", \"winvnc.exe\", \"tightvnc\", \"ultravnc\", \"radmin.exe\",\n    \"ngrok.exe\", \"frpc.exe\", \"frps.exe\", \"chisel.exe\", \"cloudflared.exe\",\n    \"plink.exe\", \"putty.exe\", \"socat.exe\", \"gost.exe\", \"iodine.exe\", \"dnscat\"]);\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where FileName has_any (rmm_tools) or FolderPath has_any (rmm_tools)\n   or ProcessCommandLine has_any (rmm_tools)\n   or (FileName =~ \"ssh.exe\" and ProcessCommandLine has_any (\" -R \", \" -L \", \" -D \", \"-N \"))\n| extend TunnelFlags = ProcessCommandLine has_any (\" -R \", \" -L \", \" -D \", \"tcp \", \"http \", \"--remote\")\n| project TimeGenerated, DeviceName, DeviceId, AccountName, AccountDomain,\n          FileName, FolderPath, ProcessCommandLine, TunnelFlags,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessAccountName, SHA256, ReportId\n| order by TimeGenerated desc\n// TUNING: if your helpdesk uses one of these, remove it from rmm_tools and write\n//         a separate rule for that tool running outside helpdesk hours or from a\n//         non-standard install path."
+        }
+      ],
+      "T1572": [
+        {
+          "id": "CA-039",
+          "name": "Remote monitoring / tunnelling tool executed",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet rmm_tools = dynamic([\n    \"anydesk.exe\", \"teamviewer.exe\", \"tv_w32.exe\", \"tv_x64.exe\", \"screenconnect\",\n    \"connectwisecontrol\", \"atera\", \"syncro\", \"splashtop\", \"logmein\", \"gotoassist\",\n    \"dwagent\", \"rustdesk.exe\", \"ammyy\", \"supremo\", \"netsupport\", \"remoteutilities\",\n    \"vncserver.exe\", \"winvnc.exe\", \"tightvnc\", \"ultravnc\", \"radmin.exe\",\n    \"ngrok.exe\", \"frpc.exe\", \"frps.exe\", \"chisel.exe\", \"cloudflared.exe\",\n    \"plink.exe\", \"putty.exe\", \"socat.exe\", \"gost.exe\", \"iodine.exe\", \"dnscat\"]);\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where FileName has_any (rmm_tools) or FolderPath has_any (rmm_tools)\n   or ProcessCommandLine has_any (rmm_tools)\n   or (FileName =~ \"ssh.exe\" and ProcessCommandLine has_any (\" -R \", \" -L \", \" -D \", \"-N \"))\n| extend TunnelFlags = ProcessCommandLine has_any (\" -R \", \" -L \", \" -D \", \"tcp \", \"http \", \"--remote\")\n| project TimeGenerated, DeviceName, DeviceId, AccountName, AccountDomain,\n          FileName, FolderPath, ProcessCommandLine, TunnelFlags,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessAccountName, SHA256, ReportId\n| order by TimeGenerated desc\n// TUNING: if your helpdesk uses one of these, remove it from rmm_tools and write\n//         a separate rule for that tool running outside helpdesk hours or from a\n//         non-standard install path."
+        }
+      ],
+      "T1071": [
+        {
+          "id": "CA-040",
+          "name": "Connection to a newly observed rare external destination",
+          "url": "",
+          "status": "Draft",
+          "sev": "Low",
+          "note": "",
+          "kql": "let lookback = 6h;\nlet baseline_days = 21d;\nlet known_destinations =\n    DeviceNetworkEvents\n    | where TimeGenerated between (ago(baseline_days) .. ago(lookback))\n    | where ActionType == \"ConnectionSuccess\"\n    | summarize DevicesSeen = dcount(DeviceId) by RemoteUrl\n    | where DevicesSeen >= 3\n    | project RemoteUrl;\nDeviceNetworkEvents\n| where TimeGenerated > ago(lookback)\n| where ActionType == \"ConnectionSuccess\"\n| where isnotempty(RemoteUrl)\n| where RemoteUrl !in (known_destinations)\n| where not(ipv4_is_private(RemoteIP))\n| where InitiatingProcessFileName !in~ (\"chrome.exe\", \"msedge.exe\", \"firefox.exe\", \"brave.exe\")\n| summarize\n    ConnCount   = count(),\n    DevicesSeen = dcount(DeviceId),\n    Devices     = make_set(DeviceName, 10),\n    Ports       = make_set(RemotePort, 10),\n    FirstSeen   = min(TimeGenerated),\n    LastSeen    = max(TimeGenerated)\n    by RemoteUrl, RemoteIP, InitiatingProcessFileName, InitiatingProcessFolderPath\n| where DevicesSeen <= 3\n| extend GeoInfo = geo_info_from_ip_address(RemoteIP)\n| extend Country = tostring(GeoInfo.country)\n| order by FirstSeen desc\n// TUNING: run this as a scheduled hunting query first, not an alert rule. The\n//         volume is high until your baseline matures."
+        }
+      ],
+      "T1530": [
+        {
+          "id": "CA-041",
+          "name": "Bulk SharePoint / OneDrive download or sync by one account",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet file_threshold = 300;\nOfficeActivity\n| where TimeGenerated > ago(lookback)\n| where OfficeWorkload in~ (\"SharePoint\", \"OneDrive\")\n| where Operation in~ (\"FileDownloaded\", \"FileSyncDownloadedFull\",\n                       \"FileSyncDownloadedPartial\", \"FileAccessed\")\n| summarize\n    FileCount     = count(),\n    DistinctFiles = dcount(OfficeObjectId),\n    Sites         = make_set(Site_Url, 20),\n    Extensions    = make_set(tostring(split(SourceFileName, \".\")[-1]), 20),\n    SourceIPs     = make_set(ClientIP, 10),\n    UserAgents    = make_set(UserAgent, 5),\n    FirstSeen     = min(TimeGenerated),\n    LastSeen      = max(TimeGenerated)\n    by UserId\n| where DistinctFiles >= file_threshold\n| extend SensitiveExtPresent = Extensions has_any (\"pst\", \"ost\", \"kdbx\", \"pfx\", \"p12\",\n                                                   \"sql\", \"bak\", \"csv\", \"xlsx\", \"docx\")\n| order by DistinctFiles desc\n// TUNING: correlate with HR leaver data. A departing employee downloading 400\n//         files in an hour is the classic true positive here."
+        }
+      ],
+      "T1567.002": [
+        {
+          "id": "CA-041",
+          "name": "Bulk SharePoint / OneDrive download or sync by one account",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet file_threshold = 300;\nOfficeActivity\n| where TimeGenerated > ago(lookback)\n| where OfficeWorkload in~ (\"SharePoint\", \"OneDrive\")\n| where Operation in~ (\"FileDownloaded\", \"FileSyncDownloadedFull\",\n                       \"FileSyncDownloadedPartial\", \"FileAccessed\")\n| summarize\n    FileCount     = count(),\n    DistinctFiles = dcount(OfficeObjectId),\n    Sites         = make_set(Site_Url, 20),\n    Extensions    = make_set(tostring(split(SourceFileName, \".\")[-1]), 20),\n    SourceIPs     = make_set(ClientIP, 10),\n    UserAgents    = make_set(UserAgent, 5),\n    FirstSeen     = min(TimeGenerated),\n    LastSeen      = max(TimeGenerated)\n    by UserId\n| where DistinctFiles >= file_threshold\n| extend SensitiveExtPresent = Extensions has_any (\"pst\", \"ost\", \"kdbx\", \"pfx\", \"p12\",\n                                                   \"sql\", \"bak\", \"csv\", \"xlsx\", \"docx\")\n| order by DistinctFiles desc\n// TUNING: correlate with HR leaver data. A departing employee downloading 400\n//         files in an hour is the classic true positive here."
+        },
+        {
+          "id": "CA-042",
+          "name": "Anonymous sharing link created for sensitive content",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 1h;\nOfficeActivity\n| where TimeGenerated > ago(lookback)\n| where OfficeWorkload in~ (\"SharePoint\", \"OneDrive\", \"SharePointFileOperation\")\n| where Operation in~ (\"AnonymousLinkCreated\", \"SharingSet\", \"SharingInvitationCreated\",\n                       \"AddedToSecureLink\", \"CompanyLinkCreated\", \"SecureLinkCreated\")\n| extend TargetUser = tostring(TargetUserOrGroupName)\n| extend External = TargetUser has \"#EXT#\" or TargetUser has \"@\" and not(TargetUser endswith \"yourdomain.com\")\n| summarize\n    ShareCount = count(),\n    Files      = make_set(SourceFileName, 30),\n    Targets    = make_set(TargetUser, 20),\n    Operations = make_set(Operation, 10),\n    SourceIPs  = make_set(ClientIP, 10)\n    by UserId, bin(TimeGenerated, 1h)\n| where ShareCount >= 10 or Operations has \"AnonymousLinkCreated\"\n| order by ShareCount desc\n// TUNING: replace \"yourdomain.com\" with your tenant's domains. Sales and legal\n//         teams share externally all day - scope this to sensitive site URLs."
+        }
+      ],
+      "T1213.002": [
+        {
+          "id": "CA-042",
+          "name": "Anonymous sharing link created for sensitive content",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 1h;\nOfficeActivity\n| where TimeGenerated > ago(lookback)\n| where OfficeWorkload in~ (\"SharePoint\", \"OneDrive\", \"SharePointFileOperation\")\n| where Operation in~ (\"AnonymousLinkCreated\", \"SharingSet\", \"SharingInvitationCreated\",\n                       \"AddedToSecureLink\", \"CompanyLinkCreated\", \"SecureLinkCreated\")\n| extend TargetUser = tostring(TargetUserOrGroupName)\n| extend External = TargetUser has \"#EXT#\" or TargetUser has \"@\" and not(TargetUser endswith \"yourdomain.com\")\n| summarize\n    ShareCount = count(),\n    Files      = make_set(SourceFileName, 30),\n    Targets    = make_set(TargetUser, 20),\n    Operations = make_set(Operation, 10),\n    SourceIPs  = make_set(ClientIP, 10)\n    by UserId, bin(TimeGenerated, 1h)\n| where ShareCount >= 10 or Operations has \"AnonymousLinkCreated\"\n| order by ShareCount desc\n// TUNING: replace \"yourdomain.com\" with your tenant's domains. Sales and legal\n//         teams share externally all day - scope this to sensitive site URLs."
+        }
+      ],
+      "T1025": [
+        {
+          "id": "CA-043",
+          "name": "Large volume copied to removable media",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet usb_mounts =\n    DeviceEvents\n    | where TimeGenerated > ago(lookback + 4h)\n    | where ActionType in (\"UsbDriveMounted\", \"UsbDriveMount\", \"PnpDeviceConnected\")\n    | project MountTime = TimeGenerated, DeviceId, DeviceName, AdditionalFields;\nDeviceFileEvents\n| where TimeGenerated > ago(lookback)\n| where ActionType in (\"FileCreated\", \"FileModified\", \"FileRenamed\")\n| where FolderPath matches regex @\"^[D-Z]:\\\\\"     // non-system drive letters\n| where not(FolderPath startswith @\"C:\\\")\n| summarize\n    FilesWritten   = count(),\n    DistinctFiles  = dcount(FileName),\n    Extensions     = make_set(tostring(split(FileName, \".\")[-1]), 20),\n    SampleFiles    = make_set(FileName, 25),\n    Drives         = make_set(tostring(substring(FolderPath, 0, 2)), 5),\n    WritingProcs   = make_set(InitiatingProcessFileName, 10),\n    FirstSeen      = min(TimeGenerated),\n    LastSeen       = max(TimeGenerated)\n    by DeviceName, DeviceId, InitiatingProcessAccountName\n| where DistinctFiles >= 100\n| join kind=leftouter usb_mounts on DeviceId\n| order by DistinctFiles desc\n// TUNING: mapped network drives also use D-Z letters. If you can, filter to\n//         removable media by joining on the UsbDriveMounted event only\n//         (change the join to kind=inner)."
+        }
+      ],
+      "T1052.001": [
+        {
+          "id": "CA-043",
+          "name": "Large volume copied to removable media",
+          "url": "",
+          "status": "Draft",
+          "sev": "Medium",
+          "note": "",
+          "kql": "let lookback = 1h;\nlet usb_mounts =\n    DeviceEvents\n    | where TimeGenerated > ago(lookback + 4h)\n    | where ActionType in (\"UsbDriveMounted\", \"UsbDriveMount\", \"PnpDeviceConnected\")\n    | project MountTime = TimeGenerated, DeviceId, DeviceName, AdditionalFields;\nDeviceFileEvents\n| where TimeGenerated > ago(lookback)\n| where ActionType in (\"FileCreated\", \"FileModified\", \"FileRenamed\")\n| where FolderPath matches regex @\"^[D-Z]:\\\\\"     // non-system drive letters\n| where not(FolderPath startswith @\"C:\\\")\n| summarize\n    FilesWritten   = count(),\n    DistinctFiles  = dcount(FileName),\n    Extensions     = make_set(tostring(split(FileName, \".\")[-1]), 20),\n    SampleFiles    = make_set(FileName, 25),\n    Drives         = make_set(tostring(substring(FolderPath, 0, 2)), 5),\n    WritingProcs   = make_set(InitiatingProcessFileName, 10),\n    FirstSeen      = min(TimeGenerated),\n    LastSeen       = max(TimeGenerated)\n    by DeviceName, DeviceId, InitiatingProcessAccountName\n| where DistinctFiles >= 100\n| join kind=leftouter usb_mounts on DeviceId\n| order by DistinctFiles desc\n// TUNING: mapped network drives also use D-Z letters. If you can, filter to\n//         removable media by joining on the UsbDriveMounted event only\n//         (change the join to kind=inner)."
+        }
+      ],
+      "T1486": [
+        {
+          "id": "CA-044",
+          "name": "Mass file modification consistent with ransomware encryption",
+          "url": "",
+          "status": "Draft",
+          "sev": "Critical",
+          "note": "",
+          "kql": "let lookback = 15m;\nlet rename_threshold = 200;\nDeviceFileEvents\n| where TimeGenerated > ago(lookback)\n| where ActionType in (\"FileRenamed\", \"FileModified\", \"FileCreated\")\n| where InitiatingProcessFileName !in~ (\n    \"msmpeng.exe\", \"mssense.exe\", \"onedrive.exe\", \"backupagent.exe\",\n    \"ccmexec.exe\", \"tiworker.exe\", \"trustedinstaller.exe\", \"msiexec.exe\",\n    \"searchindexer.exe\", \"explorer.exe\", \"svchost.exe\")\n| summarize\n    FilesTouched   = count(),\n    DistinctFolders= dcount(FolderPath),\n    DistinctExts   = dcount(tostring(split(FileName, \".\")[-1])),\n    Extensions     = make_set(tostring(split(FileName, \".\")[-1]), 25),\n    SampleFiles    = make_set(FileName, 20),\n    SampleFolders  = make_set(FolderPath, 20),\n    FirstSeen      = min(TimeGenerated),\n    LastSeen       = max(TimeGenerated)\n    by DeviceName, DeviceId, InitiatingProcessFileName,\n       InitiatingProcessFolderPath, InitiatingProcessCommandLine,\n       InitiatingProcessAccountName, InitiatingProcessId\n| where FilesTouched >= rename_threshold and DistinctFolders >= 5\n// Ransomware normalises everything to one new extension\n| extend LowExtensionDiversity = DistinctExts <= 3\n| extend RansomNoteSeen = SampleFiles has_any (\n    \"readme\", \"how_to\", \"decrypt\", \"recover\", \"restore_files\", \"_HELP_\", \"RECOVERY\")\n| extend Severity = case(RansomNoteSeen, \"Critical\",\n                         LowExtensionDiversity, \"Critical\",\n                         \"High\")\n| order by FilesTouched desc\n// TUNING: media encoders, compilers, and indexing services trip this. Baseline\n//         hard on your build servers. Do NOT raise the threshold above ~500 -\n//         you lose the early-detection window that makes this rule worth having."
+        },
+        {
+          "id": "CA-045",
+          "name": "Ransom note dropped across multiple directories",
+          "url": "",
+          "status": "Draft",
+          "sev": "Critical",
+          "note": "",
+          "kql": "let lookback = 15m;\nDeviceFileEvents\n| where TimeGenerated > ago(lookback)\n| where ActionType == \"FileCreated\"\n| where FileName matches regex @\"(?i)(readme|read_me|how[_\\-]?to[_\\-]?(decrypt|restore|recover)|decrypt[_\\-]?(me|instruction|files)|recover[_\\-]?(files|your)|restore[_\\-]?files|_?help_?|unlock[_\\-]?files|ransom)\"\n| where FileName endswith \".txt\" or FileName endswith \".html\" or FileName endswith \".hta\"\n     or FileName endswith \".README\" or FileName endswith \".md\"\n| summarize\n    NoteCount      = count(),\n    DistinctFolders= dcount(FolderPath),\n    Folders        = make_set(FolderPath, 25),\n    NoteNames      = make_set(FileName, 10),\n    FirstSeen      = min(TimeGenerated),\n    LastSeen       = max(TimeGenerated)\n    by DeviceName, DeviceId, InitiatingProcessFileName,\n       InitiatingProcessFolderPath, InitiatingProcessAccountName\n| where DistinctFolders >= 3\n| order by DistinctFolders desc\n// TUNING: legitimate README.txt files exist, but not written to 3+ folders in\n//         15 minutes by one process. Very low FP rate."
+        }
+      ],
+      "T1491.001": [
+        {
+          "id": "CA-045",
+          "name": "Ransom note dropped across multiple directories",
+          "url": "",
+          "status": "Draft",
+          "sev": "Critical",
+          "note": "",
+          "kql": "let lookback = 15m;\nDeviceFileEvents\n| where TimeGenerated > ago(lookback)\n| where ActionType == \"FileCreated\"\n| where FileName matches regex @\"(?i)(readme|read_me|how[_\\-]?to[_\\-]?(decrypt|restore|recover)|decrypt[_\\-]?(me|instruction|files)|recover[_\\-]?(files|your)|restore[_\\-]?files|_?help_?|unlock[_\\-]?files|ransom)\"\n| where FileName endswith \".txt\" or FileName endswith \".html\" or FileName endswith \".hta\"\n     or FileName endswith \".README\" or FileName endswith \".md\"\n| summarize\n    NoteCount      = count(),\n    DistinctFolders= dcount(FolderPath),\n    Folders        = make_set(FolderPath, 25),\n    NoteNames      = make_set(FileName, 10),\n    FirstSeen      = min(TimeGenerated),\n    LastSeen       = max(TimeGenerated)\n    by DeviceName, DeviceId, InitiatingProcessFileName,\n       InitiatingProcessFolderPath, InitiatingProcessAccountName\n| where DistinctFolders >= 3\n| order by DistinctFolders desc\n// TUNING: legitimate README.txt files exist, but not written to 3+ folders in\n//         15 minutes by one process. Very low FP rate."
+        }
+      ],
+      "T1485": [
+        {
+          "id": "CA-046",
+          "name": "Mass deletion of cloud resources",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 30m;\nAzureActivity\n| where TimeGenerated > ago(lookback)\n| where OperationNameValue has \"delete\" or OperationNameValue endswith \"/delete\"\n| where ActivityStatusValue in (\"Success\", \"Succeeded\", \"Accepted\", \"Started\")\n| summarize\n    DeleteCount      = count(),\n    DistinctResources= dcount(_ResourceId),\n    Operations       = make_set(OperationNameValue, 20),\n    Resources        = make_set(_ResourceId, 30),\n    ResourceGroups   = make_set(ResourceGroup, 15),\n    Subscriptions    = make_set(SubscriptionId, 10),\n    SourceIPs        = make_set(CallerIpAddress, 10),\n    FirstSeen        = min(TimeGenerated),\n    LastSeen         = max(TimeGenerated)\n    by Caller\n| where DistinctResources >= 10\n| order by DistinctResources desc\n// TUNING: exclude your IaC service principals (Terraform, Bicep pipelines) by\n//         Caller. Everything else deleting ten resources in half an hour is\n//         worth a conversation."
+        }
+      ],
+      "T1531": [
+        {
+          "id": "CA-046",
+          "name": "Mass deletion of cloud resources",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 30m;\nAzureActivity\n| where TimeGenerated > ago(lookback)\n| where OperationNameValue has \"delete\" or OperationNameValue endswith \"/delete\"\n| where ActivityStatusValue in (\"Success\", \"Succeeded\", \"Accepted\", \"Started\")\n| summarize\n    DeleteCount      = count(),\n    DistinctResources= dcount(_ResourceId),\n    Operations       = make_set(OperationNameValue, 20),\n    Resources        = make_set(_ResourceId, 30),\n    ResourceGroups   = make_set(ResourceGroup, 15),\n    Subscriptions    = make_set(SubscriptionId, 10),\n    SourceIPs        = make_set(CallerIpAddress, 10),\n    FirstSeen        = min(TimeGenerated),\n    LastSeen         = max(TimeGenerated)\n    by Caller\n| where DistinctResources >= 10\n| order by DistinctResources desc\n// TUNING: exclude your IaC service principals (Terraform, Bicep pipelines) by\n//         Caller. Everything else deleting ten resources in half an hour is\n//         worth a conversation."
+        }
+      ],
+      "T1542": [
+        {
+          "id": "CA-047",
+          "name": "Boot configuration or recovery tampering",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "note": "",
+          "kql": "let lookback = 30m;\nDeviceProcessEvents\n| where TimeGenerated > ago(lookback)\n| where (FileName =~ \"bcdedit.exe\" and ProcessCommandLine has_any (\n            \"recoveryenabled\", \"bootstatuspolicy\", \"safeboot\", \"/set\", \"/deletevalue\"))\n     or (FileName =~ \"bootcfg.exe\")\n     or (FileName =~ \"cipher.exe\" and ProcessCommandLine has \"/w\")\n     or (FileName =~ \"fsutil.exe\" and ProcessCommandLine has_any (\"usn deletejournal\", \"behavior set\"))\n     or (FileName in~ (\"powershell.exe\", \"pwsh.exe\")\n         and ProcessCommandLine has_any (\"Disable-ComputerRestore\", \"Remove-ComputerRestorePoint\",\n                                         \"Disable-WindowsOptionalFeature -FeatureName Windows-Defender\"))\n| project TimeGenerated, DeviceName, DeviceId, AccountName, AccountDomain,\n          FileName, ProcessCommandLine, ProcessIntegrityLevel,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessParentFileName, InitiatingProcessAccountName, ReportId\n| order by TimeGenerated desc\n// TUNING: dual-boot and imaging workflows use bcdedit. Exclude by DeviceName for\n//         your imaging estate, not by removing the command."
+        }
+      ],
+      "T1685": [
+        {
+          "id": "CA-024",
+          "name": "Security tooling tampered with, stopped, or excluded",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "watchlists": [],
+          "note": "",
+          "kql": "let lookback = 30m;\nunion isfuzzy=true\n(\n    DeviceProcessEvents\n    | where TimeGenerated > ago(lookback)\n    | where (FileName in~ (\"powershell.exe\", \"pwsh.exe\")\n             and ProcessCommandLine has_any (\n                \"Set-MpPreference\", \"Add-MpPreference\", \"-DisableRealtimeMonitoring\",\n                \"-DisableBehaviorMonitoring\", \"-DisableIOAVProtection\",\n                \"-DisableScriptScanning\", \"-ExclusionPath\", \"-ExclusionProcess\",\n                \"-ExclusionExtension\", \"Uninstall-WindowsFeature Windows-Defender\",\n                \"Set-MpPreference -MAPSReporting Disabled\",\n                \"Set-NetFirewallProfile\", \"-Enabled False\"))\n         or (FileName =~ \"netsh.exe\"\n             and ProcessCommandLine has_any (\"advfirewall set\", \"firewall set opmode\",\n                                             \"state off\", \"firewall add rule\"))\n         or (FileName =~ \"sc.exe\"\n             and ProcessCommandLine has_any (\"stop\", \"delete\", \"config\")\n             and ProcessCommandLine has_any (\n                 \"windefend\", \"sense\", \"wdnissvc\", \"wdfilter\", \"mpssvc\",\n                 \"securityhealthservice\", \"wscsvc\", \"sysmon\", \"eventlog\",\n                 \"cylance\", \"crowdstrike\", \"csagent\", \"sophos\", \"sentinelone\",\n                 \"carbonblack\", \"cbdefense\", \"mcafee\", \"symantec\", \"eset\", \"trendmicro\"))\n         or (FileName in~ (\"taskkill.exe\", \"net.exe\", \"net1.exe\")\n             and ProcessCommandLine has_any (\n                 \"msmpeng\", \"mssense\", \"windefend\", \"senseir\", \"csfalcon\",\n                 \"cylancesvc\", \"sedservice\", \"cbdefense\", \"sophosav\"))\n    | extend Vector = strcat(\"Command: \", FileName)\n    | extend Artifact = ProcessCommandLine\n    | extend Actor = AccountName\n),\n(\n    DeviceRegistryEvents\n    | where TimeGenerated > ago(lookback)\n    | where ActionType in (\"RegistryValueSet\", \"RegistryKeyDeleted\", \"RegistryValueDeleted\")\n    | where RegistryKey has_any (\n        @\"\\Microsoft\\Windows Defender\\Real-Time Protection\",\n        @\"\\Microsoft\\Windows Defender\\Exclusions\",\n        @\"\\Microsoft\\Windows Defender\\Features\",\n        @\"\\Policies\\Microsoft\\Windows Defender\",\n        @\"\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\EnableLUA\",\n        @\"\\Control\\SecurityProviders\\WDigest\",\n        @\"\\SYSTEM\\CurrentControlSet\\Services\\SharedAccess\\Parameters\\FirewallPolicy\",\n        @\"\\Microsoft\\Windows\\Windows Error Reporting\\Disabled\")\n    | extend Vector = \"Registry: security policy modified\"\n    | extend Artifact = strcat(RegistryKey, @\"\\\", RegistryValueName, \" = \", RegistryValueData)\n    | extend Actor = InitiatingProcessAccountName\n)\n| project TimeGenerated, DeviceName, DeviceId, Vector, Artifact, Actor,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessFolderPath, InitiatingProcessAccountName, ReportId\n| order by TimeGenerated desc\n// TUNING: your own AV exclusion deployments will fire this. Exclude by\n//         InitiatingProcessFileName for Intune / SCCM and by the specific\n//         exclusion path your policy sets - never by disabling the whole rule."
+        }
+      ],
+      "T1686": [
+        {
+          "id": "CA-024",
+          "name": "Security tooling tampered with, stopped, or excluded",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "watchlists": [],
+          "note": "",
+          "kql": "let lookback = 30m;\nunion isfuzzy=true\n(\n    DeviceProcessEvents\n    | where TimeGenerated > ago(lookback)\n    | where (FileName in~ (\"powershell.exe\", \"pwsh.exe\")\n             and ProcessCommandLine has_any (\n                \"Set-MpPreference\", \"Add-MpPreference\", \"-DisableRealtimeMonitoring\",\n                \"-DisableBehaviorMonitoring\", \"-DisableIOAVProtection\",\n                \"-DisableScriptScanning\", \"-ExclusionPath\", \"-ExclusionProcess\",\n                \"-ExclusionExtension\", \"Uninstall-WindowsFeature Windows-Defender\",\n                \"Set-MpPreference -MAPSReporting Disabled\",\n                \"Set-NetFirewallProfile\", \"-Enabled False\"))\n         or (FileName =~ \"netsh.exe\"\n             and ProcessCommandLine has_any (\"advfirewall set\", \"firewall set opmode\",\n                                             \"state off\", \"firewall add rule\"))\n         or (FileName =~ \"sc.exe\"\n             and ProcessCommandLine has_any (\"stop\", \"delete\", \"config\")\n             and ProcessCommandLine has_any (\n                 \"windefend\", \"sense\", \"wdnissvc\", \"wdfilter\", \"mpssvc\",\n                 \"securityhealthservice\", \"wscsvc\", \"sysmon\", \"eventlog\",\n                 \"cylance\", \"crowdstrike\", \"csagent\", \"sophos\", \"sentinelone\",\n                 \"carbonblack\", \"cbdefense\", \"mcafee\", \"symantec\", \"eset\", \"trendmicro\"))\n         or (FileName in~ (\"taskkill.exe\", \"net.exe\", \"net1.exe\")\n             and ProcessCommandLine has_any (\n                 \"msmpeng\", \"mssense\", \"windefend\", \"senseir\", \"csfalcon\",\n                 \"cylancesvc\", \"sedservice\", \"cbdefense\", \"sophosav\"))\n    | extend Vector = strcat(\"Command: \", FileName)\n    | extend Artifact = ProcessCommandLine\n    | extend Actor = AccountName\n),\n(\n    DeviceRegistryEvents\n    | where TimeGenerated > ago(lookback)\n    | where ActionType in (\"RegistryValueSet\", \"RegistryKeyDeleted\", \"RegistryValueDeleted\")\n    | where RegistryKey has_any (\n        @\"\\Microsoft\\Windows Defender\\Real-Time Protection\",\n        @\"\\Microsoft\\Windows Defender\\Exclusions\",\n        @\"\\Microsoft\\Windows Defender\\Features\",\n        @\"\\Policies\\Microsoft\\Windows Defender\",\n        @\"\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\EnableLUA\",\n        @\"\\Control\\SecurityProviders\\WDigest\",\n        @\"\\SYSTEM\\CurrentControlSet\\Services\\SharedAccess\\Parameters\\FirewallPolicy\",\n        @\"\\Microsoft\\Windows\\Windows Error Reporting\\Disabled\")\n    | extend Vector = \"Registry: security policy modified\"\n    | extend Artifact = strcat(RegistryKey, @\"\\\", RegistryValueName, \" = \", RegistryValueData)\n    | extend Actor = InitiatingProcessAccountName\n)\n| project TimeGenerated, DeviceName, DeviceId, Vector, Artifact, Actor,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessFolderPath, InitiatingProcessAccountName, ReportId\n| order by TimeGenerated desc\n// TUNING: your own AV exclusion deployments will fire this. Exclude by\n//         InitiatingProcessFileName for Intune / SCCM and by the specific\n//         exclusion path your policy sets - never by disabling the whole rule."
+        }
+      ],
+      "T1686.003": [
+        {
+          "id": "CA-024",
+          "name": "Security tooling tampered with, stopped, or excluded",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "watchlists": [],
+          "note": "",
+          "kql": "let lookback = 30m;\nunion isfuzzy=true\n(\n    DeviceProcessEvents\n    | where TimeGenerated > ago(lookback)\n    | where (FileName in~ (\"powershell.exe\", \"pwsh.exe\")\n             and ProcessCommandLine has_any (\n                \"Set-MpPreference\", \"Add-MpPreference\", \"-DisableRealtimeMonitoring\",\n                \"-DisableBehaviorMonitoring\", \"-DisableIOAVProtection\",\n                \"-DisableScriptScanning\", \"-ExclusionPath\", \"-ExclusionProcess\",\n                \"-ExclusionExtension\", \"Uninstall-WindowsFeature Windows-Defender\",\n                \"Set-MpPreference -MAPSReporting Disabled\",\n                \"Set-NetFirewallProfile\", \"-Enabled False\"))\n         or (FileName =~ \"netsh.exe\"\n             and ProcessCommandLine has_any (\"advfirewall set\", \"firewall set opmode\",\n                                             \"state off\", \"firewall add rule\"))\n         or (FileName =~ \"sc.exe\"\n             and ProcessCommandLine has_any (\"stop\", \"delete\", \"config\")\n             and ProcessCommandLine has_any (\n                 \"windefend\", \"sense\", \"wdnissvc\", \"wdfilter\", \"mpssvc\",\n                 \"securityhealthservice\", \"wscsvc\", \"sysmon\", \"eventlog\",\n                 \"cylance\", \"crowdstrike\", \"csagent\", \"sophos\", \"sentinelone\",\n                 \"carbonblack\", \"cbdefense\", \"mcafee\", \"symantec\", \"eset\", \"trendmicro\"))\n         or (FileName in~ (\"taskkill.exe\", \"net.exe\", \"net1.exe\")\n             and ProcessCommandLine has_any (\n                 \"msmpeng\", \"mssense\", \"windefend\", \"senseir\", \"csfalcon\",\n                 \"cylancesvc\", \"sedservice\", \"cbdefense\", \"sophosav\"))\n    | extend Vector = strcat(\"Command: \", FileName)\n    | extend Artifact = ProcessCommandLine\n    | extend Actor = AccountName\n),\n(\n    DeviceRegistryEvents\n    | where TimeGenerated > ago(lookback)\n    | where ActionType in (\"RegistryValueSet\", \"RegistryKeyDeleted\", \"RegistryValueDeleted\")\n    | where RegistryKey has_any (\n        @\"\\Microsoft\\Windows Defender\\Real-Time Protection\",\n        @\"\\Microsoft\\Windows Defender\\Exclusions\",\n        @\"\\Microsoft\\Windows Defender\\Features\",\n        @\"\\Policies\\Microsoft\\Windows Defender\",\n        @\"\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\EnableLUA\",\n        @\"\\Control\\SecurityProviders\\WDigest\",\n        @\"\\SYSTEM\\CurrentControlSet\\Services\\SharedAccess\\Parameters\\FirewallPolicy\",\n        @\"\\Microsoft\\Windows\\Windows Error Reporting\\Disabled\")\n    | extend Vector = \"Registry: security policy modified\"\n    | extend Artifact = strcat(RegistryKey, @\"\\\", RegistryValueName, \" = \", RegistryValueData)\n    | extend Actor = InitiatingProcessAccountName\n)\n| project TimeGenerated, DeviceName, DeviceId, Vector, Artifact, Actor,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessFolderPath, InitiatingProcessAccountName, ReportId\n| order by TimeGenerated desc\n// TUNING: your own AV exclusion deployments will fire this. Exclude by\n//         InitiatingProcessFileName for Intune / SCCM and by the specific\n//         exclusion path your policy sets - never by disabling the whole rule."
+        }
+      ],
+      "T1685.001": [
+        {
+          "id": "CA-025",
+          "name": "Event log cleared or audit policy changed",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "watchlists": [],
+          "note": "",
+          "kql": "let lookback = 30m;\nunion isfuzzy=true\n(\n    DeviceProcessEvents\n    | where TimeGenerated > ago(lookback)\n    | where (FileName =~ \"wevtutil.exe\" and ProcessCommandLine has_any (\"cl \", \"clear-log\", \"sl \", \"/e:false\"))\n         or (FileName in~ (\"powershell.exe\", \"pwsh.exe\")\n             and ProcessCommandLine has_any (\"Clear-EventLog\", \"Remove-EventLog\",\n                                             \"Limit-EventLog\", \"wevtutil\"))\n         or (FileName =~ \"auditpol.exe\" and ProcessCommandLine has_any (\"/set\", \"/clear\", \"/remove\"))\n         or (FileName =~ \"fsutil.exe\" and ProcessCommandLine has \"usn deletejournal\")\n    | extend Vector = strcat(\"Log tampering via \", FileName)\n    | extend Artifact = ProcessCommandLine\n    | extend Actor = AccountName\n),\n(\n    SecurityEvent\n    | where TimeGenerated > ago(lookback)\n    | where EventID in (1102, 104)    // 1102 = Security log cleared, 104 = System log cleared\n    | extend Vector = \"Windows event log cleared (EventID 1102/104)\"\n    | extend Artifact = Activity\n    | extend Actor = SubjectUserName\n    | extend DeviceName = Computer, DeviceId = \"\", ReportId = tostring(EventOriginId)\n    | extend InitiatingProcessFileName = \"\", InitiatingProcessCommandLine = \"\",\n             InitiatingProcessFolderPath = \"\", InitiatingProcessAccountName = SubjectUserName\n)\n| project TimeGenerated, DeviceName, Vector, Artifact, Actor,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessAccountName\n| order by TimeGenerated desc\n// TUNING: log clearing during imaging or decommissioning is the only common FP.\n//         Exclude by DeviceName for your build VLAN if you have one."
+        }
+      ],
+      "T1685.005": [
+        {
+          "id": "CA-025",
+          "name": "Event log cleared or audit policy changed",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "watchlists": [],
+          "note": "",
+          "kql": "let lookback = 30m;\nunion isfuzzy=true\n(\n    DeviceProcessEvents\n    | where TimeGenerated > ago(lookback)\n    | where (FileName =~ \"wevtutil.exe\" and ProcessCommandLine has_any (\"cl \", \"clear-log\", \"sl \", \"/e:false\"))\n         or (FileName in~ (\"powershell.exe\", \"pwsh.exe\")\n             and ProcessCommandLine has_any (\"Clear-EventLog\", \"Remove-EventLog\",\n                                             \"Limit-EventLog\", \"wevtutil\"))\n         or (FileName =~ \"auditpol.exe\" and ProcessCommandLine has_any (\"/set\", \"/clear\", \"/remove\"))\n         or (FileName =~ \"fsutil.exe\" and ProcessCommandLine has \"usn deletejournal\")\n    | extend Vector = strcat(\"Log tampering via \", FileName)\n    | extend Artifact = ProcessCommandLine\n    | extend Actor = AccountName\n),\n(\n    SecurityEvent\n    | where TimeGenerated > ago(lookback)\n    | where EventID in (1102, 104)    // 1102 = Security log cleared, 104 = System log cleared\n    | extend Vector = \"Windows event log cleared (EventID 1102/104)\"\n    | extend Artifact = Activity\n    | extend Actor = SubjectUserName\n    | extend DeviceName = Computer, DeviceId = \"\", ReportId = tostring(EventOriginId)\n    | extend InitiatingProcessFileName = \"\", InitiatingProcessCommandLine = \"\",\n             InitiatingProcessFolderPath = \"\", InitiatingProcessAccountName = SubjectUserName\n)\n| project TimeGenerated, DeviceName, Vector, Artifact, Actor,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessAccountName\n| order by TimeGenerated desc\n// TUNING: log clearing during imaging or decommissioning is the only common FP.\n//         Exclude by DeviceName for your build VLAN if you have one."
+        }
+      ],
+      "T1070": [
+        {
+          "id": "CA-025",
+          "name": "Event log cleared or audit policy changed",
+          "url": "",
+          "status": "Draft",
+          "sev": "High",
+          "watchlists": [],
+          "note": "",
+          "kql": "let lookback = 30m;\nunion isfuzzy=true\n(\n    DeviceProcessEvents\n    | where TimeGenerated > ago(lookback)\n    | where (FileName =~ \"wevtutil.exe\" and ProcessCommandLine has_any (\"cl \", \"clear-log\", \"sl \", \"/e:false\"))\n         or (FileName in~ (\"powershell.exe\", \"pwsh.exe\")\n             and ProcessCommandLine has_any (\"Clear-EventLog\", \"Remove-EventLog\",\n                                             \"Limit-EventLog\", \"wevtutil\"))\n         or (FileName =~ \"auditpol.exe\" and ProcessCommandLine has_any (\"/set\", \"/clear\", \"/remove\"))\n         or (FileName =~ \"fsutil.exe\" and ProcessCommandLine has \"usn deletejournal\")\n    | extend Vector = strcat(\"Log tampering via \", FileName)\n    | extend Artifact = ProcessCommandLine\n    | extend Actor = AccountName\n),\n(\n    SecurityEvent\n    | where TimeGenerated > ago(lookback)\n    | where EventID in (1102, 104)    // 1102 = Security log cleared, 104 = System log cleared\n    | extend Vector = \"Windows event log cleared (EventID 1102/104)\"\n    | extend Artifact = Activity\n    | extend Actor = SubjectUserName\n    | extend DeviceName = Computer, DeviceId = \"\", ReportId = tostring(EventOriginId)\n    | extend InitiatingProcessFileName = \"\", InitiatingProcessCommandLine = \"\",\n             InitiatingProcessFolderPath = \"\", InitiatingProcessAccountName = SubjectUserName\n)\n| project TimeGenerated, DeviceName, Vector, Artifact, Actor,\n          InitiatingProcessFileName, InitiatingProcessCommandLine,\n          InitiatingProcessAccountName\n| order by TimeGenerated desc\n// TUNING: log clearing during imaging or decommissioning is the only common FP.\n//         Exclude by DeviceName for your build VLAN if you have one."
+        }
+      ]
+    }
+  }
+}

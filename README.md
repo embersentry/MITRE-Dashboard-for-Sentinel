@@ -38,7 +38,7 @@ That same action caps the code at **1,024 characters** on Consumption, which is 
 
 ## Known limits
 
-- **Sub-techniques depend on the API version.** Stable `Microsoft.SecurityInsights` versions, including the default `2024-09-01`, do not return `subTechniques`, so rules map onto parent technique tiles only. A preview version that returns it, such as `2024-10-01-preview`, maps them onto sub-technique tiles too.
+- **Sub-techniques need the preview API version.** `sentinelApiVersion` defaults to `2024-10-01-preview` because it returns `subTechniques`, which is what puts rules on the dashboard's sub-technique tiles. Stable versions (`2024-09-01` and later) do not return it, and rules then land on parent technique tiles only — so moving this parameter to a stable version silently coarsens the mapping.
 - **Techniques outside the dashboard's matrix are stored but not drawn.** `techniqueRemap` covers every revoked ID, but a rule tagged with an ID MITRE retired without a replacement — `T1026`, `T1034`, `T1043`, `T1051`, `T1053.004`, `T1061`, `T1062`, `T1064`, `T1108`, `T1149`, `T1153`, `T1175` — or with a technique newer than the matrix, lands under a key the grid never renders. Re-tag those rules in Sentinel.
 - **Synced rules show as mapped but unlinked.** The sync cannot know a OneNote page, so `url` is empty and those tiles count as partial coverage, not full.
 - **Editing a synced entry in the dashboard makes it permanent.** The edit form rewrites the entry from its own fields, dropping `source`, so later runs treat it as hand-added: its status is no longer refreshed from Sentinel and it is not removed when the rule is deleted there.

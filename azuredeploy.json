@@ -226,9 +226,9 @@
     },
     "sentinelApiVersion": {
       "type": "string",
-      "defaultValue": "2024-09-01",
+      "defaultValue": "2024-10-01-preview",
       "metadata": {
-        "description": "Microsoft.SecurityInsights API version used to list analytics rules. Stable versions (including 2024-09-01) do not return the subTechniques property, so rules land only on parent technique tiles. Use a preview version that returns it, e.g. 2024-10-01-preview, to map rules onto the dashboard's sub-technique tiles as well."
+        "description": "Microsoft.SecurityInsights API version used to list analytics rules. 2024-10-01-preview returns the subTechniques property, so rules map onto the dashboard's sub-technique tiles as well as the parent ones. Stable versions (2024-09-01 and later) do not return it, and rules then land on parent technique tiles only."
       }
     },
     "assignSentinelReader": {

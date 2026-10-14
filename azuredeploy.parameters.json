@@ -1,0 +1,24 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceResourceId": {
+      "value": "/subscriptions/CHANGE-ME-SUBSCRIPTION-ID/resourceGroups/CHANGE-ME-RG/providers/Microsoft.OperationalInsights/workspaces/CHANGE-ME-WORKSPACE"
+    },
+    "customerName": {
+      "value": "CHANGE-ME Customer name as shown in dashboard"
+    },
+    "sharePointSiteUrl": {
+      "value": "https://CHANGE-ME.sharepoint.com/sites/CHANGE-ME"
+    },
+    "boardFilePath": {
+      "value": "/Shared Documents/CHANGE-ME-FOLDER/board.json"
+    },
+    "logicAppName": {
+      "value": "la-mitre-board-sync-CHANGE-ME"
+    },
+    "dryRun": {
+      "value": true
+    }
+  }
+}

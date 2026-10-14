@@ -1,0 +1,705 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "description": "Nightly sync of one customer's Microsoft Sentinel analytics rules into the MITRE ATT&CK coverage dashboard's board.json in SharePoint."
+  },
+  "parameters": {
+    "workspaceResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "CHANGE. Full resource ID of the customer's Log Analytics workspace (Sentinel). Workspace > Properties > Resource ID."
+      }
+    },
+    "customerName": {
+      "type": "string",
+      "metadata": {
+        "description": "CHANGE. Customer view name exactly as it appears in the dashboard dropdown (case-insensitive). If no view has this name, one is created."
+      }
+    },
+    "sharePointSiteUrl": {
+      "type": "string",
+      "metadata": {
+        "description": "CHANGE. SharePoint site holding board.json, e.g. https://salus.sharepoint.com/sites/SOC (no trailing slash, no library)."
+      }
+    },
+    "boardFilePath": {
+      "type": "string",
+      "defaultValue": "/Shared Documents/MITRE/board.json",
+      "metadata": {
+        "description": "CHANGE. Path to board.json inside the site, starting with the library. The 'Documents' library is 'Shared Documents' in paths."
+      }
+    },
+    "logicAppName": {
+      "type": "string",
+      "defaultValue": "la-mitre-board-sync",
+      "metadata": {
+        "description": "Name of the Logic App. Use one per customer, e.g. la-mitre-board-sync-contoso."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Region. Defaults to the resource group's region."
+      }
+    },
+    "dryRun": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "CHANGE after first test. true = read and merge but don't write board.json (check the Summary step in run history). Set false to go live."
+      }
+    },
+    "runHour": {
+      "type": "int",
+      "defaultValue": 2,
+      "metadata": {
+        "description": "Hour of day (0-23) to run, in timeZone."
+      },
+      "minValue": 0,
+      "maxValue": 23
+    },
+    "timeZone": {
+      "type": "string",
+      "defaultValue": "GMT Standard Time",
+      "metadata": {
+        "description": "Windows time zone name for the schedule. 'GMT Standard Time' = UK, follows BST."
+      }
+    },
+    "techniqueRemap": {
+      "type": "object",
+      "defaultValue": {
+        "T1002": "T1560",
+        "T1004": "T1547.004",
+        "T1009": "T1027.001",
+        "T1013": "T1547.010",
+        "T1015": "T1546.008",
+        "T1017": "T1072",
+        "T1019": "T1542.001",
+        "T1022": "T1560",
+        "T1023": "T1547.009",
+        "T1024": "T1573",
+        "T1028": "T1021.006",
+        "T1031": "T1543.003",
+        "T1032": "T1573",
+        "T1035": "T1569.002",
+        "T1038": "T1574.001",
+        "T1042": "T1546.001",
+        "T1044": "T1574.010",
+        "T1045": "T1027.002",
+        "T1050": "T1543.003",
+        "T1053.001": "T1053.002",
+        "T1054": "T1685",
+        "T1058": "T1574.011",
+        "T1060": "T1547.001",
+        "T1063": "T1518.001",
+        "T1065": "T1571",
+        "T1066": "T1027.005",
+        "T1067": "T1542.003",
+        "T1070.001": "T1685.005",
+        "T1070.002": "T1685.006",
+        "T1073": "T1574.001",
+        "T1075": "T1550.002",
+        "T1076": "T1021.001",
+        "T1077": "T1021.002",
+        "T1079": "T1573",
+        "T1081": "T1552.001",
+        "T1084": "T1546.003",
+        "T1085": "T1218.011",
+        "T1086": "T1059.001",
+        "T1088": "T1548.002",
+        "T1089": "T1685",
+        "T1093": "T1055.012",
+        "T1094": "T1095",
+        "T1096": "T1564.004",
+        "T1097": "T1550.003",
+        "T1099": "T1070.006",
+        "T1100": "T1505.003",
+        "T1101": "T1547.005",
+        "T1103": "T1546.010",
+        "T1107": "T1070.004",
+        "T1109": "T1542.002",
+        "T1116": "T1553.002",
+        "T1117": "T1218.010",
+        "T1118": "T1218.004",
+        "T1121": "T1218.009",
+        "T1122": "T1546.015",
+        "T1126": "T1070.005",
+        "T1128": "T1546.007",
+        "T1130": "T1553.004",
+        "T1131": "T1547.002",
+        "T1138": "T1546.011",
+        "T1139": "T1552.003",
+        "T1141": "T1056.002",
+        "T1142": "T1555.001",
+        "T1143": "T1564.003",
+        "T1144": "T1553.001",
+        "T1145": "T1552.004",
+        "T1146": "T1070.003",
+        "T1147": "T1564.002",
+        "T1148": "T1690",
+        "T1150": "T1647",
+        "T1151": "T1036.006",
+        "T1152": "T1569.001",
+        "T1154": "T1546.005",
+        "T1155": "T1059.002",
+        "T1156": "T1546.004",
+        "T1157": "T1574.004",
+        "T1158": "T1564.001",
+        "T1159": "T1543.001",
+        "T1160": "T1543.004",
+        "T1161": "T1546.006",
+        "T1162": "T1647",
+        "T1163": "T1037.004",
+        "T1164": "T1547.007",
+        "T1165": "T1037.005",
+        "T1166": "T1548.001",
+        "T1167": "T1555.002",
+        "T1168": "T1053",
+        "T1169": "T1548.003",
+        "T1170": "T1218.005",
+        "T1171": "T1557.001",
+        "T1172": "T1090.004",
+        "T1173": "T1559.002",
+        "T1174": "T1556.002",
+        "T1177": "T1547.008",
+        "T1178": "T1134.005",
+        "T1179": "T1056.004",
+        "T1180": "T1546.002",
+        "T1181": "T1055.011",
+        "T1182": "T1546.009",
+        "T1183": "T1546.012",
+        "T1184": "T1563.001",
+        "T1186": "T1055.013",
+        "T1188": "T1090.003",
+        "T1191": "T1218.003",
+        "T1192": "T1566.002",
+        "T1193": "T1566.001",
+        "T1194": "T1566.003",
+        "T1196": "T1218.002",
+        "T1198": "T1553.003",
+        "T1206": "T1548.003",
+        "T1208": "T1558.003",
+        "T1209": "T1547.003",
+        "T1214": "T1552.002",
+        "T1215": "T1547.006",
+        "T1223": "T1218.001",
+        "T1483": "T1568.002",
+        "T1487": "T1561.002",
+        "T1488": "T1561.001",
+        "T1492": "T1565.001",
+        "T1493": "T1565.002",
+        "T1494": "T1565.003",
+        "T1500": "T1027.004",
+        "T1501": "T1543.002",
+        "T1502": "T1134.004",
+        "T1503": "T1555.003",
+        "T1504": "T1546.013",
+        "T1506": "T1550.004",
+        "T1514": "T1548.004",
+        "T1519": "T1546.014",
+        "T1522": "T1552.005",
+        "T1527": "T1550.001",
+        "T1536": "T1578.004",
+        "T1547.011": "T1647",
+        "T1562": "T1685",
+        "T1562.001": "T1685",
+        "T1562.002": "T1685.001",
+        "T1562.003": "T1690",
+        "T1562.004": "T1686",
+        "T1562.006": "T1685",
+        "T1562.007": "T1686.001",
+        "T1562.008": "T1685.002",
+        "T1562.009": "T1688",
+        "T1562.010": "T1689",
+        "T1562.011": "T1685.003",
+        "T1562.012": "T1685.004",
+        "T1562.013": "T1686.002",
+        "T1574.002": "T1574.001",
+        "T1656": "T1684.001",
+        "T1672": "T1684.002"
+      },
+      "metadata": {
+        "description": "Every revoked ATT&CK technique ID -> its current replacement, generated from MITRE's ATT&CK v20.0 STIX revoked-by relationships. Valid for the dashboard's v19.2 matrix (v20.0 retired nothing). Only edit to override a mapping."
+      }
+    },
+    "retiredTechniques": {
+      "type": "array",
+      "defaultValue": [
+        "T1026",
+        "T1034",
+        "T1043",
+        "T1051",
+        "T1053.004",
+        "T1061",
+        "T1062",
+        "T1064",
+        "T1108",
+        "T1149",
+        "T1153",
+        "T1175"
+      ],
+      "metadata": {
+        "description": "Technique IDs MITRE deprecated with no replacement. Rules tagged with these are listed in the run Summary so you can re-tag them."
+      }
+    },
+    "sentinelApiVersion": {
+      "type": "string",
+      "defaultValue": "2024-09-01",
+      "metadata": {
+        "description": "Microsoft.SecurityInsights API version used to list analytics rules."
+      }
+    },
+    "assignSentinelReader": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Grant the Logic App's managed identity Microsoft Sentinel Reader on the workspace. Needs Owner/User Access Administrator there. Set false if done separately or via Azure Lighthouse."
+      }
+    },
+    "createIntegrationAccount": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "The JavaScript merge step needs an integration account. true = create a Free-tier one. Free is limited to one per region per subscription; set false and fill existingIntegrationAccountId if you already have one."
+      }
+    },
+    "integrationAccountName": {
+      "type": "string",
+      "defaultValue": "ia-mitre-board-sync",
+      "metadata": {
+        "description": "Name for the new integration account (only used when createIntegrationAccount is true)."
+      }
+    },
+    "existingIntegrationAccountId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Resource ID of an existing integration account in the same region (only used when createIntegrationAccount is false)."
+      }
+    }
+  },
+  "variables": {
+    "wsParts": "[split(parameters('workspaceResourceId'), '/')]",
+    "spConnectionName": "[concat(parameters('logicAppName'), '-sharepoint')]",
+    "iaId": "[if(parameters('createIntegrationAccount'), resourceId('Microsoft.Logic/integrationAccounts', parameters('integrationAccountName')), parameters('existingIntegrationAccountId'))]"
+  },
+  "resources": [
+    {
+      "condition": "[parameters('createIntegrationAccount')]",
+      "type": "Microsoft.Logic/integrationAccounts",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('integrationAccountName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Free"
+      },
+      "properties": {
+        "state": "Enabled"
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('spConnectionName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "displayName": "[concat('SharePoint - ', parameters('logicAppName'))]",
+        "api": {
+          "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'sharepointonline')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('logicAppName')]",
+      "location": "[parameters('location')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('spConnectionName'))]",
+        "[resourceId('Microsoft.Logic/integrationAccounts', parameters('integrationAccountName'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "integrationAccount": {
+          "id": "[variables('iaId')]"
+        },
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "type": "Object",
+              "defaultValue": {}
+            },
+            "workspaceResourceId": {
+              "type": "String"
+            },
+            "customerName": {
+              "type": "String"
+            },
+            "sharePointSiteUrl": {
+              "type": "String"
+            },
+            "boardFilePath": {
+              "type": "String"
+            },
+            "sentinelApiVersion": {
+              "type": "String"
+            },
+            "techniqueRemap": {
+              "type": "Object"
+            },
+            "retiredTechniques": {
+              "type": "Array"
+            },
+            "dryRun": {
+              "type": "Bool"
+            }
+          },
+          "triggers": {
+            "Recurrence": {
+              "type": "Recurrence",
+              "recurrence": {
+                "frequency": "Day",
+                "interval": 1,
+                "timeZone": "[parameters('timeZone')]",
+                "schedule": {
+                  "hours": [
+                    "[parameters('runHour')]"
+                  ],
+                  "minutes": [
+                    0
+                  ]
+                }
+              }
+            }
+          },
+          "actions": {
+            "Config": {
+              "type": "Compose",
+              "runAfter": {},
+              "inputs": {
+                "customerName": "@parameters('customerName')",
+                "remap": "@parameters('techniqueRemap')",
+                "retired": "@parameters('retiredTechniques')"
+              }
+            },
+            "Init_rules": {
+              "type": "InitializeVariable",
+              "runAfter": {
+                "Config": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "rules",
+                    "type": "array",
+                    "value": []
+                  }
+                ]
+              }
+            },
+            "Init_nextUrl": {
+              "type": "InitializeVariable",
+              "runAfter": {
+                "Init_rules": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "nextUrl",
+                    "type": "string",
+                    "value": "https://management.azure.com@{parameters('workspaceResourceId')}/providers/Microsoft.SecurityInsights/alertRules?api-version=@{parameters('sentinelApiVersion')}"
+                  }
+                ]
+              }
+            },
+            "Page_through_rules": {
+              "type": "Until",
+              "runAfter": {
+                "Init_nextUrl": [
+                  "Succeeded"
+                ]
+              },
+              "expression": "@equals(variables('nextUrl'), '')",
+              "limit": {
+                "count": 50,
+                "timeout": "PT1H"
+              },
+              "actions": {
+                "Get_rules_page": {
+                  "type": "Http",
+                  "runAfter": {},
+                  "inputs": {
+                    "method": "GET",
+                    "uri": "@variables('nextUrl')",
+                    "authentication": {
+                      "type": "ManagedServiceIdentity",
+                      "audience": "https://management.azure.com/"
+                    }
+                  }
+                },
+                "Collect": {
+                  "type": "Compose",
+                  "runAfter": {
+                    "Get_rules_page": [
+                      "Succeeded"
+                    ]
+                  },
+                  "inputs": "@union(variables('rules'), coalesce(body('Get_rules_page')?['value'], json('[]')))"
+                },
+                "Set_rules": {
+                  "type": "SetVariable",
+                  "runAfter": {
+                    "Collect": [
+                      "Succeeded"
+                    ]
+                  },
+                  "inputs": {
+                    "name": "rules",
+                    "value": "@outputs('Collect')"
+                  }
+                },
+                "Set_nextUrl": {
+                  "type": "SetVariable",
+                  "runAfter": {
+                    "Set_rules": [
+                      "Succeeded"
+                    ]
+                  },
+                  "inputs": {
+                    "name": "nextUrl",
+                    "value": "@{coalesce(body('Get_rules_page')?['nextLink'], '')}"
+                  }
+                }
+              }
+            },
+            "All_rules": {
+              "type": "Compose",
+              "runAfter": {
+                "Page_through_rules": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": "@variables('rules')"
+            },
+            "Get_board_metadata": {
+              "type": "ApiConnection",
+              "runAfter": {
+                "All_rules": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['sharepointonline']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointSiteUrl')))}/GetFileByPath",
+                "queries": {
+                  "path": "@parameters('boardFilePath')",
+                  "queryParametersSingleEncoded": true
+                }
+              }
+            },
+            "Get_board": {
+              "type": "ApiConnection",
+              "runAfter": {
+                "Get_board_metadata": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['sharepointonline']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointSiteUrl')))}/GetFileContentByPath",
+                "queries": {
+                  "path": "@parameters('boardFilePath')",
+                  "inferContentType": false,
+                  "queryParametersSingleEncoded": true
+                }
+              }
+            },
+            "Board_text": {
+              "type": "Compose",
+              "runAfter": {
+                "Get_board": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": "@base64ToString(coalesce(body('Get_board')?['$content'], base64(string(body('Get_board')))))"
+            },
+            "Merge_into_board": {
+              "type": "JavaScriptCode",
+              "runAfter": {
+                "Board_text": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "code": "// Runs inside the Logic App \"Merge_into_board\" (Execute JavaScript Code) action.\n// Reads three earlier actions: Config, All_rules, Board_text. Returns { content, summary }.\nconst cfg = workflowContext.actions.Config.outputs;\nconst rules = workflowContext.actions.All_rules.outputs || [];\nlet raw = workflowContext.actions.Board_text.outputs;\nconst board = typeof raw === 'string' ? JSON.parse(raw.replace(/^\\uFEFF/, '')) : raw;\n\nconst SEV = { informational: 'Informational', low: 'Low', medium: 'Medium', high: 'High', critical: 'Critical' };\nconst remap = cfg.remap || {};\nconst retired = new Set(cfg.retired || []);\nconst now = new Date().toISOString();\nconst norm = s => String(s || '').trim().toLowerCase();\n\nboard.customers = board.customers || [];\nboard.data = board.data || {};\nlet cust = board.customers.find(c => norm(c.name) === norm(cfg.customerName));\nlet created = false;\nif (!cust) {\n  cust = { id: 'c' + Math.random().toString(36).slice(2, 9), name: cfg.customerName };\n  board.customers.push(cust);\n  created = true;\n}\nconst bag = board.data[cust.id] = board.data[cust.id] || {};\n\n// 1. Drop everything the previous sync added. Hand-added analytics are untouched.\nlet removed = 0;\nfor (const t of Object.keys(bag)) {\n  const before = bag[t].length;\n  bag[t] = bag[t].filter(a => a.source !== 'sentinel');\n  removed += before - bag[t].length;\n  if (!bag[t].length) delete bag[t];\n}\n\n// 2. Place every Sentinel rule on each technique it is tagged with.\nconst matched = new Set();\nlet added = 0, updated = 0;\nconst noTechniques = [], remapped = [], retiredTags = [];\nfor (const r of rules) {\n  const p = r.properties || {};\n  const name = p.displayName || r.name;\n  let techs = [].concat(p.techniques || [], p.subTechniques || []);\n  techs = [...new Set(techs.map(t => {\n    if (remap[t]) { remapped.push(name + ': ' + t + ' -> ' + remap[t]); return remap[t]; }\n    if (retired.has(t)) retiredTags.push(name + ': ' + t);\n    return t;\n  }))];\n  if (!techs.length) { noTechniques.push(name); continue; }\n\n  const m = /^(CA-\\d{3,})/i.exec(name);\n  const ref = m ? m[1].toUpperCase() : '';\n  const status = p.enabled ? 'Enabled' : 'Disabled';\n  const sev = SEV[norm(p.severity)] || 'Medium';\n\n  // If this rule is already on the board by hand (same CA reference or name, any technique),\n  // keep your mapping: refresh status/severity on those entries and add nothing new.\n  const hits = [];\n  for (const t of Object.keys(bag)) for (const a of bag[t])\n    if (a.source !== 'sentinel' && ((ref && norm(a.id) === norm(ref)) || norm(a.name) === norm(name))) hits.push(a);\n  if (hits.length) {\n    for (const hit of hits) {\n      hit.status = status; hit.sev = sev;\n      hit.sentinelRuleId = r.name; hit.lastSynced = now;\n      if (!hit.kql && p.query) hit.kql = p.query;\n      matched.add(hit); updated++;\n    }\n    continue;\n  }\n\n  for (const t of techs) {\n    const arr = bag[t] = bag[t] || [];\n    {\n      arr.push({\n        id: ref, name, status, sev, url: '',\n        note: 'Synced from Sentinel (' + (r.kind || 'rule') + ')',\n        watchlists: [], kql: p.query || '',\n        source: 'sentinel', sentinelRuleId: r.name, lastSynced: now\n      });\n      added++;\n    }\n  }\n}\n\n// 3. Drift: analytics marked Enabled on the board that no Sentinel rule matched.\nconst notInSentinel = [];\nfor (const t of Object.keys(bag)) for (const a of bag[t])\n  if (a.source !== 'sentinel' && !matched.has(a) && a.status === 'Enabled')\n    notInSentinel.push(t + ' ' + (a.id ? a.id + ' ' : '') + a.name);\n\nboard.updated = now;\nboard.updatedBy = 'Sentinel sync';\n\nreturn {\n  content: JSON.stringify(board, null, 2),\n  summary: {\n    customer: cust.name, customerId: cust.id, customerViewCreated: created,\n    rulesRead: rules.length, previousSyncedEntriesRemoved: removed,\n    entriesAdded: added, handAddedEntriesUpdated: updated,\n    rulesWithNoTechniques: noTechniques, techniqueIdsRemapped: remapped,\n    retiredTechniquesWithNoReplacement: retiredTags,\n    enabledOnBoardButNotInSentinel: notInSentinel\n  }\n};\n"
+              }
+            },
+            "Summary": {
+              "type": "Compose",
+              "runAfter": {
+                "Merge_into_board": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": "@body('Merge_into_board')?['result']?['summary']"
+            },
+            "Write_unless_dry_run": {
+              "type": "If",
+              "runAfter": {
+                "Summary": [
+                  "Succeeded"
+                ]
+              },
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@parameters('dryRun')",
+                      false
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Write_board": {
+                  "type": "ApiConnection",
+                  "runAfter": {},
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['sharepointonline']['connectionId']"
+                      }
+                    },
+                    "method": "put",
+                    "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointSiteUrl')))}/files/@{encodeURIComponent(body('Get_board_metadata')?['Id'])}",
+                    "body": "@body('Merge_into_board')?['result']?['content']"
+                  }
+                }
+              },
+              "else": {
+                "actions": {}
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "sharepointonline": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('spConnectionName'))]",
+                "connectionName": "[variables('spConnectionName')]",
+                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'sharepointonline')]"
+              }
+            }
+          },
+          "workspaceResourceId": {
+            "value": "[parameters('workspaceResourceId')]"
+          },
+          "customerName": {
+            "value": "[parameters('customerName')]"
+          },
+          "sharePointSiteUrl": {
+            "value": "[parameters('sharePointSiteUrl')]"
+          },
+          "boardFilePath": {
+            "value": "[parameters('boardFilePath')]"
+          },
+          "sentinelApiVersion": {
+            "value": "[parameters('sentinelApiVersion')]"
+          },
+          "techniqueRemap": {
+            "value": "[parameters('techniqueRemap')]"
+          },
+          "retiredTechniques": {
+            "value": "[parameters('retiredTechniques')]"
+          },
+          "dryRun": {
+            "value": "[parameters('dryRun')]"
+          }
+        }
+      }
+    },
+    {
+      "condition": "[parameters('assignSentinelReader')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "[concat(parameters('logicAppName'), '-sentinel-reader')]",
+      "subscriptionId": "[variables('wsParts')[2]]",
+      "resourceGroup": "[variables('wsParts')[4]]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Logic/workflows', parameters('logicAppName'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "parameters": {
+          "workspaceName": {
+            "value": "[variables('wsParts')[8]]"
+          },
+          "principalId": {
+            "value": "[reference(resourceId('Microsoft.Logic/workflows', parameters('logicAppName')), '2019-05-01', 'full').identity.principalId]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "workspaceName": {
+              "type": "string"
+            },
+            "principalId": {
+              "type": "string"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.OperationalInsights/workspaces/{0}', parameters('workspaceName'))]",
+              "name": "[guid(resourceGroup().id, parameters('workspaceName'), parameters('principalId'), 'sentinel-reader')]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '8d289c81-5878-46d4-8554-54e1e3d8b5cb')]",
+                "principalId": "[parameters('principalId')]",
+                "principalType": "ServicePrincipal"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "logicAppPrincipalId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Logic/workflows', parameters('logicAppName')), '2019-05-01', 'full').identity.principalId]"
+    },
+    "sharePointConnectionToAuthorise": {
+      "type": "string",
+      "value": "[variables('spConnectionName')]"
+    }
+  }
+}

@@ -224,31 +224,11 @@
         "description": "Every revoked ATT&CK technique ID -> its current replacement, generated from MITRE's ATT&CK v20.0 STIX revoked-by relationships. Valid for the dashboard's v19.2 matrix (v20.0 retired nothing). Only edit to override a mapping."
       }
     },
-    "retiredTechniques": {
-      "type": "array",
-      "defaultValue": [
-        "T1026",
-        "T1034",
-        "T1043",
-        "T1051",
-        "T1053.004",
-        "T1061",
-        "T1062",
-        "T1064",
-        "T1108",
-        "T1149",
-        "T1153",
-        "T1175"
-      ],
-      "metadata": {
-        "description": "Technique IDs MITRE deprecated with no replacement. Rules tagged with these are listed in the run Summary so you can re-tag them."
-      }
-    },
     "sentinelApiVersion": {
       "type": "string",
-      "defaultValue": "2024-09-01",
+      "defaultValue": "2024-10-01-preview",
       "metadata": {
-        "description": "Microsoft.SecurityInsights API version used to list analytics rules."
+        "description": "Microsoft.SecurityInsights API version used to list analytics rules. 2024-10-01-preview returns the subTechniques property, so rules map onto the dashboard's sub-technique tiles as well as the parent ones. Stable versions (2024-09-01 and later) do not return it, and rules then land on parent technique tiles only."
       }
     },
     "assignSentinelReader": {
@@ -354,9 +334,6 @@
             "techniqueRemap": {
               "type": "Object"
             },
-            "retiredTechniques": {
-              "type": "Array"
-            },
             "dryRun": {
               "type": "Bool"
             }
@@ -385,8 +362,7 @@
               "runAfter": {},
               "inputs": {
                 "customerName": "@parameters('customerName')",
-                "remap": "@parameters('techniqueRemap')",
-                "retired": "@parameters('retiredTechniques')"
+                "remap": "@parameters('techniqueRemap')"
               }
             },
             "Init_rules": {
@@ -492,10 +468,35 @@
               },
               "inputs": "@variables('rules')"
             },
+            "Shape_entries": {
+              "type": "Select",
+              "runAfter": {
+                "All_rules": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "from": "@outputs('All_rules')",
+                "select": {
+                  "techniques": "@union(coalesce(item()?['properties']?['techniques'], json('[]')), coalesce(item()?['properties']?['subTechniques'], json('[]')))",
+                  "id": "@if(startswith(toupper(coalesce(item()?['properties']?['displayName'], item()?['name'])), 'CA-'), first(split(coalesce(item()?['properties']?['displayName'], item()?['name']), ' ')), '')",
+                  "name": "@coalesce(item()?['properties']?['displayName'], item()?['name'])",
+                  "status": "@if(equals(item()?['properties']?['enabled'], true), 'Enabled', 'Disabled')",
+                  "sev": "@coalesce(item()?['properties']?['severity'], 'Medium')",
+                  "url": "",
+                  "note": "@concat('Synced from Sentinel (', coalesce(item()?['kind'], 'rule'), ')')",
+                  "watchlists": "@json('[]')",
+                  "kql": "@coalesce(item()?['properties']?['query'], '')",
+                  "source": "sentinel",
+                  "sentinelRuleId": "@item()?['name']",
+                  "lastSynced": "@utcNow()"
+                }
+              }
+            },
             "Get_board_metadata": {
               "type": "ApiConnection",
               "runAfter": {
-                "All_rules": [
+                "Shape_entries": [
                   "Succeeded"
                 ]
               },
@@ -552,17 +553,33 @@
                 ]
               },
               "inputs": {
-                "code": "// Runs inside the Logic App \"Merge_into_board\" (Execute JavaScript Code) action.\n// Reads three earlier actions: Config, All_rules, Board_text. Returns { content, summary }.\nconst cfg = workflowContext.actions.Config.outputs;\nconst rules = workflowContext.actions.All_rules.outputs || [];\nlet raw = workflowContext.actions.Board_text.outputs;\nconst board = typeof raw === 'string' ? JSON.parse(raw.replace(/^\\uFEFF/, '')) : raw;\n\nconst SEV = { informational: 'Informational', low: 'Low', medium: 'Medium', high: 'High', critical: 'Critical' };\nconst remap = cfg.remap || {};\nconst retired = new Set(cfg.retired || []);\nconst now = new Date().toISOString();\nconst norm = s => String(s || '').trim().toLowerCase();\n\nboard.customers = board.customers || [];\nboard.data = board.data || {};\nlet cust = board.customers.find(c => norm(c.name) === norm(cfg.customerName));\nlet created = false;\nif (!cust) {\n  cust = { id: 'c' + Math.random().toString(36).slice(2, 9), name: cfg.customerName };\n  board.customers.push(cust);\n  created = true;\n}\nconst bag = board.data[cust.id] = board.data[cust.id] || {};\n\n// 1. Drop everything the previous sync added. Hand-added analytics are untouched.\nlet removed = 0;\nfor (const t of Object.keys(bag)) {\n  const before = bag[t].length;\n  bag[t] = bag[t].filter(a => a.source !== 'sentinel');\n  removed += before - bag[t].length;\n  if (!bag[t].length) delete bag[t];\n}\n\n// 2. Place every Sentinel rule on each technique it is tagged with.\nconst matched = new Set();\nlet added = 0, updated = 0;\nconst noTechniques = [], remapped = [], retiredTags = [];\nfor (const r of rules) {\n  const p = r.properties || {};\n  const name = p.displayName || r.name;\n  let techs = [].concat(p.techniques || [], p.subTechniques || []);\n  techs = [...new Set(techs.map(t => {\n    if (remap[t]) { remapped.push(name + ': ' + t + ' -> ' + remap[t]); return remap[t]; }\n    if (retired.has(t)) retiredTags.push(name + ': ' + t);\n    return t;\n  }))];\n  if (!techs.length) { noTechniques.push(name); continue; }\n\n  const m = /^(CA-\\d{3,})/i.exec(name);\n  const ref = m ? m[1].toUpperCase() : '';\n  const status = p.enabled ? 'Enabled' : 'Disabled';\n  const sev = SEV[norm(p.severity)] || 'Medium';\n\n  // If this rule is already on the board by hand (same CA reference or name, any technique),\n  // keep your mapping: refresh status/severity on those entries and add nothing new.\n  const hits = [];\n  for (const t of Object.keys(bag)) for (const a of bag[t])\n    if (a.source !== 'sentinel' && ((ref && norm(a.id) === norm(ref)) || norm(a.name) === norm(name))) hits.push(a);\n  if (hits.length) {\n    for (const hit of hits) {\n      hit.status = status; hit.sev = sev;\n      hit.sentinelRuleId = r.name; hit.lastSynced = now;\n      if (!hit.kql && p.query) hit.kql = p.query;\n      matched.add(hit); updated++;\n    }\n    continue;\n  }\n\n  for (const t of techs) {\n    const arr = bag[t] = bag[t] || [];\n    {\n      arr.push({\n        id: ref, name, status, sev, url: '',\n        note: 'Synced from Sentinel (' + (r.kind || 'rule') + ')',\n        watchlists: [], kql: p.query || '',\n        source: 'sentinel', sentinelRuleId: r.name, lastSynced: now\n      });\n      added++;\n    }\n  }\n}\n\n// 3. Drift: analytics marked Enabled on the board that no Sentinel rule matched.\nconst notInSentinel = [];\nfor (const t of Object.keys(bag)) for (const a of bag[t])\n  if (a.source !== 'sentinel' && !matched.has(a) && a.status === 'Enabled')\n    notInSentinel.push(t + ' ' + (a.id ? a.id + ' ' : '') + a.name);\n\nboard.updated = now;\nboard.updatedBy = 'Sentinel sync';\n\nreturn {\n  content: JSON.stringify(board, null, 2),\n  summary: {\n    customer: cust.name, customerId: cust.id, customerViewCreated: created,\n    rulesRead: rules.length, previousSyncedEntriesRemoved: removed,\n    entriesAdded: added, handAddedEntriesUpdated: updated,\n    rulesWithNoTechniques: noTechniques, techniqueIdsRemapped: remapped,\n    retiredTechniquesWithNoReplacement: retiredTags,\n    enabledOnBoardButNotInSentinel: notInSentinel\n  }\n};\n"
+                "code": "const A=workflowContext.actions,c=A.Config.outputs,m=c.remap||{},L=s=>String(s||'').trim().toLowerCase();\nconst b=JSON.parse(String(A.Board_text.outputs).trim());\nb.v=b.v||3;b.customers=b.customers||[];b.data=b.data||{};\nlet u=b.customers.find(x=>L(x.name)===L(c.customerName));\nif(!u){u={id:'c'+Math.random().toString(36).slice(2,9),name:c.customerName};b.customers.push(u)}\nif(!b.active)b.active=u.id;\nconst R=A.Shape_entries.outputs||[],g={};let k=0;\nfor(const r of R){const{techniques:T,...e}=r;for(const x of new Set((T||[]).map(y=>m[y]||y))){(g[x]=g[x]||[]).push(e);k++}}\nconst o=b.data[u.id]||{};\nfor(const x in o){const h=o[x].filter(a=>a.source!=='sentinel');if(h.length)g[x]=(g[x]||[]).concat(h)}\nb.data[u.id]=g;b.updated=new Date().toISOString();b.updatedBy='Sentinel sync';\nreturn{content:JSON.stringify(b,null,2),summary:{customer:u.name,rulesRead:R.length,entriesWritten:k,techniquesCovered:Object.keys(g).length}};\n",
+                "explicitDependencies": {
+                  "actions": [
+                    "Config",
+                    "Shape_entries",
+                    "Board_text"
+                  ]
+                }
               }
             },
-            "Summary": {
+            "Merge_result": {
               "type": "Compose",
               "runAfter": {
                 "Merge_into_board": [
                   "Succeeded"
                 ]
               },
-              "inputs": "@body('Merge_into_board')?['result']?['summary']"
+              "inputs": "@coalesce(body('Merge_into_board')?['result'], body('Merge_into_board'))"
+            },
+            "Summary": {
+              "type": "Compose",
+              "runAfter": {
+                "Merge_result": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": "@outputs('Merge_result')?['summary']"
             },
             "Write_unless_dry_run": {
               "type": "If",
@@ -593,7 +610,7 @@
                     },
                     "method": "put",
                     "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointSiteUrl')))}/files/@{encodeURIComponent(body('Get_board_metadata')?['Id'])}",
-                    "body": "@body('Merge_into_board')?['result']?['content']"
+                    "body": "@outputs('Merge_result')?['content']"
                   }
                 }
               },
@@ -631,9 +648,6 @@
           },
           "techniqueRemap": {
             "value": "[parameters('techniqueRemap')]"
-          },
-          "retiredTechniques": {
-            "value": "[parameters('retiredTechniques')]"
           },
           "dryRun": {
             "value": "[parameters('dryRun')]"
